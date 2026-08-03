@@ -1,0 +1,20 @@
+plugins {
+    id 'java'
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+dependencies {
+    implementation 'org.ow2.asm:asm:9.8'
+    implementation 'org.ow2.asm:asm-tree:9.8'
+    implementation 'org.ow2.asm:asm-commons:9.8'
+    implementation 'org.ow2.asm:asm-util:9.8'
+    implementation 'net.java.jinput:jinput:2.0.5'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
+}
+
+test {
+    useJUnitPlatform()
+}

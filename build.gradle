@@ -1,0 +1,364 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+}
+
+group = 'com.cleanroommc'
+version = '1.0.0'
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+sourceSets {
+    adapter // Method bodies merged into LWJGL 3 classes at runtime
+    legacyFixture // "1.12-era mod" for testing
+}
+
+configurations {
+    // The API diff reads LWJGL 2's bytecode
+    lwjgl2 {
+        transitive = false
+    }
+    lwjgl3
+    tool {
+        canBeConsumed = false
+        canBeResolved = true
+    }
+    legacyFixtureCompileOnly.extendsFrom(lwjgl2)
+    adapterCompileOnly.extendsFrom(lwjgl3)
+}
+
+def lwjgl3Bom = 'org.lwjgl:lwjgl-bom:3.4.2'
+def lwjgl3Modules = ['org.lwjgl:lwjgl', 'org.lwjgl:lwjgl-opengl', 'org.lwjgl:lwjgl-openal', 'org.lwjgl:lwjgl-sdl']
+// 1.12.2's LWJGL 2
+def lwjgl2Version = '2.9.4-nightly-20150209'
+FileCollection lwjgl2Files = configurations.lwjgl2
+FileCollection lwjgl3Files = configurations.lwjgl3
+FileCollection toolClasspath = configurations.tool
+
+dependencies {
+    lwjgl2 "org.lwjgl.lwjgl:lwjgl:${lwjgl2Version}"
+    lwjgl2 "org.lwjgl.lwjgl:lwjgl_util:${lwjgl2Version}"
+
+    lwjgl3 platform(lwjgl3Bom)
+    lwjgl3Modules.each {
+        lwjgl3 it
+    }
+
+    tool project(':tool')
+
+    api 'org.ow2.asm:asm:9.8'
+    api 'org.ow2.asm:asm-tree:9.8'
+    api 'org.ow2.asm:asm-commons:9.8'
+
+    compileOnly platform(lwjgl3Bom)
+    lwjgl3Modules.each {
+        compileOnly it
+    }
+
+    // 1.12.2 declares JInput
+    compileOnly 'net.java.jinput:jinput:2.0.5'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testImplementation 'org.ow2.asm:asm-util:9.8'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
+    testImplementation platform(lwjgl3Bom)
+    lwjgl3Modules.each {
+        testImplementation it
+    }
+    testRuntimeOnly 'org.lwjgl:lwjgl::natives-windows'
+    testRuntimeOnly 'org.lwjgl:lwjgl-sdl::natives-windows'
+    testRuntimeOnly 'org.lwjgl:lwjgl-openal::natives-windows'
+}
+
+compileAdapterJava {
+    options.release = 8
+}
+
+compileLegacyFixtureJava {
+    options.release = 8
+}
+
+tasks.withType(JavaExec).configureEach {
+    classpath toolClasspath
+}
+
+def splitPackageReport = layout.buildDirectory.file('lwjgly/split-package.txt')
+
+tasks.register('checkSplitPackage', JavaExec) {
+    group = 'verification'
+    description = 'Fails if LWJGL 3 seals or signs org.lwjgl, which would forbid split-package shims'
+    mainClass = 'com.cleanroommc.lwjgly.tool.CheckSplitPackage'
+    inputs.files(lwjgl3Files)
+    outputs.file(splitPackageReport)
+    argumentProviders.add({ [lwjgl3Files.asPath, splitPackageReport.get().asFile.absolutePath] } as CommandLineArgumentProvider)
+}
+
+def deltasJson = layout.buildDirectory.file('lwjgly/deltas.json')
+def deltaReport = layout.buildDirectory.file('lwjgly/delta-report.txt')
+def problemsDoc = layout.buildDirectory.file('lwjgly/PROBLEMS.md')
+
+tasks.register('apiDiff', JavaExec) {
+    group = 'compat'
+    description = 'Diffs the LWJGL 2 API against LWJGL 3 and writes deltas.json and the delta report'
+    mainClass = 'com.cleanroommc.lwjgly.tool.ApiDiff'
+    inputs.files(lwjgl2Files, lwjgl3Files)
+    outputs.file(deltasJson)
+    outputs.file(deltaReport)
+    argumentProviders.add({
+        [lwjgl2Files.asPath, lwjgl3Files.asPath,
+         deltasJson.get().asFile.absolutePath, deltaReport.get().asFile.absolutePath]
+    } as CommandLineArgumentProvider)
+}
+
+def adapterSrcDir = layout.buildDirectory.dir('generated/adapter-src')
+def adapterMapFile = layout.buildDirectory.file('lwjgly/adapter-map.txt').get().asFile
+def handWrittenAdapters = layout.projectDirectory.dir('src/adapter/java')
+
+tasks.register('generateAdapters', JavaExec) {
+    group = 'compat'
+    description = 'Writes generated method shims and indexes handwritten adapters'
+    mainClass = 'com.cleanroommc.lwjgly.tool.GenerateAdapters'
+    inputs.files(lwjgl2Files, lwjgl3Files)
+    // The handwritten adapter is merged before the generated shim for the same class
+    inputs.files(fileTree(handWrittenAdapters))
+    outputs.dir(adapterSrcDir)
+    outputs.file(adapterMapFile)
+    argumentProviders.add({
+        [lwjgl2Files.asPath, lwjgl3Files.asPath, adapterSrcDir.get().asFile.absolutePath,
+         handWrittenAdapters.asFile.absolutePath, adapterMapFile.absolutePath]
+    } as CommandLineArgumentProvider)
+}
+
+sourceSets.adapter.java.srcDir(files(adapterSrcDir).builtBy('generateAdapters'))
+
+def shimSrcDir = layout.buildDirectory.dir('generated/shim-src')
+def vendoredDir = layout.buildDirectory.dir('generated/vendored')
+def classAdapters = layout.projectDirectory.dir('src/main/java')
+def nativeCallsDoc = layout.buildDirectory.file('lwjgly/native_calls.md')
+
+tasks.register('generateShims', JavaExec) {
+    group = 'compat'
+    description = 'Emits the LWJGL 2-only classes: vendored bytecode where self-contained, throwing placeholders otherwise'
+    mainClass = 'com.cleanroommc.lwjgly.tool.GenerateShims'
+    inputs.files(lwjgl2Files, lwjgl3Files, fileTree(classAdapters))
+    outputs.dirs(shimSrcDir, vendoredDir)
+    outputs.file(nativeCallsDoc)
+    argumentProviders.add({
+        [lwjgl2Files.asPath, lwjgl3Files.asPath, shimSrcDir.get().asFile.absolutePath,
+         vendoredDir.get().asFile.absolutePath, classAdapters.asFile.absolutePath, nativeCallsDoc.get().asFile.absolutePath]
+    } as CommandLineArgumentProvider)
+}
+
+sourceSets.main.java.srcDir(files(shimSrcDir).builtBy('generateShims'))
+sourceSets.main.output.dir(vendoredDir, builtBy: 'generateShims')
+
+def vendoredJar = tasks.register('vendoredJar', Jar) {
+    description = "Packages LWJGL 2's vendored bytecode so shims and adapters can compile against it"
+    from(vendoredDir)
+    archiveClassifier = 'vendored'
+    dependsOn 'generateShims'
+}
+
+dependencies {
+    compileOnly files(vendoredJar)
+    adapterCompileOnly files(sourceSets.main.output.classesDirs, vendoredJar)
+}
+
+// Adapters ship as resources, not as classes.
+// The transformer parses them with ASM and they are never class-loaded.
+def adapterResourceDir = layout.buildDirectory.dir('generated/adapter-resources')
+def adapterClassesDir = layout.buildDirectory.dir('classes/java/adapter')
+
+tasks.register('verifyAdapters', JavaExec) {
+    group = 'verification'
+    description = 'Checks every adapter against the rules the runtime merge depends on'
+    dependsOn 'adapterClasses'
+    mainClass = 'com.cleanroommc.lwjgly.tool.VerifyAdapters'
+    inputs.files(fileTree(adapterClassesDir))
+    argumentProviders.add({ [adapterClassesDir.get().asFile.absolutePath] } as CommandLineArgumentProvider)
+}
+
+def conversionsReport = layout.buildDirectory.file('lwjgly/conversions.txt')
+
+tasks.register('verifyConversions', JavaExec) {
+    group = 'verification'
+    description = "Checks every generated conversion against LWJGL 3's own @NativeType"
+    mainClass = 'com.cleanroommc.lwjgly.tool.VerifyConversions'
+    inputs.files(lwjgl2Files, lwjgl3Files)
+    outputs.file(conversionsReport)
+    argumentProviders.add({
+        [lwjgl2Files.asPath, lwjgl3Files.asPath, conversionsReport.get().asFile.absolutePath]
+    } as CommandLineArgumentProvider)
+}
+
+def mainClassesDir = layout.buildDirectory.dir('classes/java/main')
+def knownGapsFile = layout.projectDirectory.file('scope/known-gaps.txt')
+def coverageReport = layout.buildDirectory.file('lwjgly/coverage-gaps.txt')
+
+tasks.register('verifyCoverage', JavaExec) {
+    group = 'verification'
+    description = 'Fails if any LWJGL 2 member a mod could call would not link against LWJGLY'
+    dependsOn 'classes', 'adapterClasses'
+    mainClass = 'com.cleanroommc.lwjgly.tool.VerifyCoverage'
+    inputs.files(lwjgl2Files, lwjgl3Files, fileTree(mainClassesDir), fileTree(vendoredDir), fileTree(adapterClassesDir), knownGapsFile)
+    outputs.file(coverageReport)
+    argumentProviders.add({
+        [lwjgl2Files.asPath, lwjgl3Files.asPath,
+         mainClassesDir.get().asFile.absolutePath + File.pathSeparator + vendoredDir.get().asFile.absolutePath,
+         adapterClassesDir.get().asFile.absolutePath, adapterMapFile.absolutePath,
+         knownGapsFile.asFile.absolutePath, coverageReport.get().asFile.absolutePath]
+    } as CommandLineArgumentProvider)
+}
+
+tasks.register('problemsDoc', JavaExec) {
+    group = 'compat'
+    description = 'Writes build/lwjgly/PROBLEMS.md from the shipped shims and adapters'
+    dependsOn 'classes', 'adapterClasses'
+    mainClass = 'com.cleanroommc.lwjgly.tool.WriteProblems'
+    inputs.files(lwjgl2Files, lwjgl3Files, fileTree(mainClassesDir), fileTree(vendoredDir), fileTree(adapterClassesDir))
+    outputs.file(problemsDoc)
+    argumentProviders.add({
+        [lwjgl2Files.asPath, lwjgl3Files.asPath,
+         mainClassesDir.get().asFile.absolutePath + File.pathSeparator + vendoredDir.get().asFile.absolutePath,
+         adapterClassesDir.get().asFile.absolutePath, adapterMapFile.absolutePath,
+         problemsDoc.get().asFile.absolutePath]
+    } as CommandLineArgumentProvider)
+}
+
+tasks.named('build') {
+    dependsOn 'problemsDoc'
+}
+
+tasks.register('scanUsage', JavaExec) {
+    group = 'compat'
+    description = 'Reports what real mod jars would hit: covered, throwing, or unlinkable'
+    dependsOn 'classes', 'adapterClasses'
+    mainClass = 'com.cleanroommc.lwjgly.tool.ScanUsage'
+    def scanReport = layout.buildDirectory.file('lwjgly/usage-report.txt')
+    def jars = providers.gradleProperty('jars').orElse('')
+    argumentProviders.add({
+        [lwjgl3Files.asPath,
+         mainClassesDir.get().asFile.absolutePath + File.pathSeparator + vendoredDir.get().asFile.absolutePath,
+         adapterClassesDir.get().asFile.absolutePath, adapterMapFile.absolutePath, jars.get(),
+         scanReport.get().asFile.absolutePath]
+    } as CommandLineArgumentProvider)
+}
+
+tasks.register('packageAdapters', Sync) {
+    group = 'compat'
+    description = 'Lays adapter class files out under /lwjgly/adapters and writes the target index'
+    from(sourceSets.adapter.output.classesDirs)
+    into(adapterResourceDir.map { it.dir('lwjgly/adapters') })
+    def mapFile = adapterMapFile
+    def indexFile = adapterResourceDir.get().file('lwjgly/adapters.index').asFile
+    def adapterMap = [:]
+    doFirst {
+        mapFile.eachLine { line ->
+            if (line && !line.startsWith('#')) {
+                def parts = line.split('=')
+                adapterMap[parts[0]] = parts[1]
+            }
+        }
+    }
+    eachFile {
+        def adapter = it.relativePath.pathString.replace(File.separator, '/') - '.class'
+        if (!adapterMap.containsKey(adapter)) {
+            it.exclude()
+        }
+    }
+    includeEmptyDirs = false
+    doLast {
+        indexFile.parentFile.mkdirs()
+        def byTarget = [:]
+        adapterMap.each { adapter, target -> byTarget.computeIfAbsent(target) { [] } << adapter }
+        def header = '# <LWJGL 3 class> = <adapters that merge into it, in order>'
+        def entries = byTarget.collect { target, adapters -> target + '=' + adapters.join(',') }.sort()
+        indexFile.text = ([header] + entries).join(System.lineSeparator()) + System.lineSeparator()
+    }
+}
+
+sourceSets.main.resources.srcDir(files(adapterResourceDir).builtBy('packageAdapters'))
+def fixtureClassesDir = layout.buildDirectory.dir('classes/java/legacyFixture')
+
+test {
+    useJUnitPlatform()
+    environment 'SDL_VIDEODRIVER', 'dummy' // Headless smoke tests
+    dependsOn 'legacyFixtureClasses'
+    systemProperty 'fixtures.dir', fixtureClassesDir.get().asFile.absolutePath
+    inputs.files(fileTree(fixtureClassesDir))
+}
+
+def apiJar = tasks.register('apiJar', Jar) {
+    group = 'build'
+    description = 'Class-loading hook and the window SPI portion of LWJGLY'
+    from(sourceSets.main.output) {
+        include 'com/cleanroommc/lwjgly/LWJGLY.class'
+        include 'com/cleanroommc/lwjgly/LWJGLYTransformer.class'
+        include 'com/cleanroommc/lwjgly/spi/**'
+    }
+    archiveBaseName = 'lwjgly-api'
+}
+
+tasks.named('assemble') {
+    dependsOn apiJar
+}
+
+tasks.register('verifyApiJar') {
+    group = 'verification'
+    description = 'Checks that the dependency-free API artifact contains no runtime internals'
+    inputs.file(apiJar.flatMap { it.archiveFile })
+    doLast {
+        def classes = new java.util.zip.ZipFile(inputs.files.singleFile).withCloseable { zip ->
+            zip.entries().findAll { !it.directory && it.name.endsWith('.class') }.collect { it.name }.sort()
+        }
+        def allowed = [
+                'com/cleanroommc/lwjgly/LWJGLY.class',
+                'com/cleanroommc/lwjgly/LWJGLYTransformer.class',
+                'com/cleanroommc/lwjgly/spi/WindowBridge.class',
+                'com/cleanroommc/lwjgly/spi/WindowBridge$KeyEvent.class',
+                'com/cleanroommc/lwjgly/spi/WindowBridge$MouseEvent.class',
+        ].sort()
+        if (classes != allowed) {
+            throw new GradleException("Unexpected classes in lwjgly-api: ${classes - allowed}. Missing: ${allowed - classes}")
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn 'checkSplitPackage', 'verifyAdapters', 'verifyConversions', 'verifyCoverage', 'verifyApiJar'
+}
+
+publishing {
+    publications {
+        create('maven', MavenPublication) {
+            from components.java
+            artifactId = 'lwjgly'
+            pom {
+                name = 'LWJGLY'
+                description = "LWJGL 2's API delivered into an LWJGL 3 runtime"
+                url = 'https://github.com/CleanroomMC/LWJGLY'
+                licenses {
+                    license {
+                        name = 'BSD-3-Clause'
+                        url = 'https://opensource.org/licenses/BSD-3-Clause'
+                    }
+                }
+            }
+        }
+        create('api', MavenPublication) {
+            artifact apiJar
+            artifactId = 'lwjgly-api'
+            pom {
+                name = 'LWJGLY API'
+                description = "Class-loading hook and the window SPI portion of LWJGLY"
+                url = 'https://github.com/CleanroomMC/LWJGLY'
+                licenses {
+                    license {
+                        name = 'BSD-3-Clause'
+                        url = 'https://opensource.org/licenses/BSD-3-Clause'
+                    }
+                }
+            }
+        }
+    }
+}

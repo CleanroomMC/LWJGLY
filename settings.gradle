@@ -1,0 +1,13 @@
+rootProject.name = 'LWJGLY'
+
+include 'tool'
+
+dependencyResolutionManagement {
+    repositories {
+        mavenCentral()
+        maven {
+            name = 'Mojang'
+            url = 'https://libraries.minecraft.net'
+        }
+    }
+}
