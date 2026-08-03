@@ -10,7 +10,7 @@ java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 sourceSets {
     adapter // Method bodies merged into LWJGL 3 classes at runtime
-    legacyFixture // "1.12-era mod" for testing
+    legacyFixture // LWJGL 2 fixture for testing
 }
 
 configurations {
@@ -197,7 +197,7 @@ def coverageReport = layout.buildDirectory.file('lwjgly/coverage-gaps.txt')
 
 tasks.register('verifyCoverage', JavaExec) {
     group = 'verification'
-    description = 'Fails if any LWJGL 2 member a mod could call would not link against LWJGLY'
+    description = 'Fails if any visible LWJGL 2 member would not link against LWJGLY'
     dependsOn 'classes', 'adapterClasses'
     mainClass = 'com.cleanroommc.lwjgly.tool.VerifyCoverage'
     inputs.files(lwjgl2Files, lwjgl3Files, fileTree(mainClassesDir), fileTree(vendoredDir), fileTree(adapterClassesDir), knownGapsFile)
@@ -231,7 +231,7 @@ tasks.named('build') {
 
 tasks.register('scanUsage', JavaExec) {
     group = 'compat'
-    description = 'Reports what real mod jars would hit: covered, throwing, or unlinkable'
+    description = 'Reports what real LWJGL 2 dependents would hit: covered, throwing, or unlinkable'
     dependsOn 'classes', 'adapterClasses'
     mainClass = 'com.cleanroommc.lwjgly.tool.ScanUsage'
     def scanReport = layout.buildDirectory.file('lwjgly/usage-report.txt')
