@@ -32,8 +32,6 @@ The last rule is tried after genuine short spellings, so a real short method is 
 `com.cleanroommc:lwjgly`: runtime portion, shims and adapters.
 `com.cleanroommc:lwjgly-api`: compile portion, bridges.
 
-Usages:
-
 ```groovy
 repositories {
     maven {
@@ -47,6 +45,31 @@ dependencies {
     runtimeOnly 'com.cleanroommc:lwjgly:1.0.0'
 }
 ```
+
+### Class Transformer
+
+```java
+byte[] transformed = LWJGLYTransformer.handles(name) ? LWJGLYTransformer.transform(name, bytes) : bytes;
+```
+
+### Window Bridge
+
+`Display`, `Keyboard` and `Mouse` do not open anything of their own.
+They read the window Cleanroom already has.
+
+Implement `com.cleanroommc.lwjgly.spi.WindowBridge` over the SDL implementation and hand it over once, before any mod code runs:
+
+*In Cleanroom's Case:*
+
+```java
+LWJGLY.setWindowBridge(new CleanroomWindowBridge(com.cleanroommc.client.input.Window.main()));
+```
+
+`WindowBridge.makeCurrent()` must bind LWJGL 3's capabilities as well as SDL's context.
+
+`SDL_GL_MakeCurrent` and `GL.setCapabilities()` together.
+
+LWJGL 3 resolves GL entry points per thread, doing one without the other leaves the two disagreeing about which context is live.
 
 ## Building and Contributing
 
