@@ -66,5 +66,5 @@ public class Timer {
     public String toString() {
         return "Timer[Time=" + getTime() + ", Paused=" + paused + "]";
     }
-    
+
 }
