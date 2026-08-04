@@ -99,19 +99,19 @@ public final class GenerateAdapters {
 
         StringBuilder sb = new StringBuilder();
         sb.append("\n    public ").append(isStatic ? "static " : "")
-                .append(type.getReturnType().getClassName()).append(' ').append(delta.name()).append('(');
+                .append(JavaNames.type(type.getReturnType())).append(' ').append(delta.name()).append('(');
         for (int i = 0; i < params.length; i++) {
             if (i > 0) {
                 sb.append(", ");
             }
-            sb.append(params[i].getClassName()).append(" p").append(i);
+            sb.append(JavaNames.type(params[i])).append(" p").append(i);
         }
         sb.append(") {\n");
 
         boolean delegates = delta.fix().isAutomatic() && isStatic;
         if (!delegates) {
             sb.append("        throw new UnsupportedOperationException(\"")
-                    .append(escape(owner.replace('/', '.') + "." + delta.name() + delta.desc()))
+                    .append(escape(JavaNames.className(owner) + "." + delta.name() + delta.desc()))
                     .append(" is not implemented by LWJGLY: see build/lwjgly/PROBLEMS.md\");\n");
         } else {
             Type target = Type.getMethodType(delta.target().desc());
@@ -123,7 +123,7 @@ public final class GenerateAdapters {
             if (wrap != null) {
                 sb.append(wrap).append('(');
             }
-            sb.append(owner.replace('/', '.')).append('.').append(delta.target().name()).append('(');
+            sb.append(JavaNames.className(owner)).append('.').append(delta.target().name()).append('(');
             List<Delta.Argument> arguments = delta.target().arguments();
             for (int i = 0; i < arguments.size(); i++) {
                 if (i > 0) {

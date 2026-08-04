@@ -1,12 +1,6 @@
 # Members LWJGLY does not provide at all, so an LWJGL 2 call site would not link.
 # Each needs a reason. Anything not listed here fails the build.
 
-# LWJGL 2 protected implementation fields - LWJGL 3 owns a different internal representation.
-org/lwjgl/PointerBuffer.pointers : Ljava/nio/ByteBuffer;
-org/lwjgl/PointerBuffer.view : Ljava/nio/Buffer;
-org/lwjgl/PointerBuffer.view32 : Ljava/nio/IntBuffer;
-org/lwjgl/PointerBuffer.view64 : Ljava/nio/LongBuffer;
-
 # OpenGL ES is outside LWJGLY scope...(?) - PixelFormatLWJGL makes these signatures non-public API.
 org/lwjgl/opengl/Display.create(Lorg/lwjgl/opengl/PixelFormatLWJGL;Lorg/lwjgl/opengles/ContextAttribs;)V
 org/lwjgl/opengl/Display.create(Lorg/lwjgl/opengl/PixelFormatLWJGL;Lorg/lwjgl/opengl/Drawable;Lorg/lwjgl/opengles/ContextAttribs;)V

@@ -4,6 +4,7 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
+import org.objectweb.asm.tree.InnerClassNode;
 import org.objectweb.asm.tree.MethodNode;
 
 import java.io.BufferedWriter;
@@ -77,6 +78,13 @@ public final class GenerateShims {
             }
         }
 
+        Set<String> nestedPlaceholders = publicNestedTypes(lwjgl2, placeheld);
+        shipped.addAll(nestedPlaceholders);
+
+        Set<String> sourceOwners = new TreeSet<>(placeheld);
+        sourceOwners.addAll(handWrittenNames);
+        vendored.removeAll(publicNestedTypes(lwjgl2, sourceOwners));
+
         Map<String, List<Ctor>> generatedConstructors = new TreeMap<>();
         for (String name : placeheld) {
             generatedConstructors.put(name, constructorShapes(lwjgl2.get(name), shipped, lwjgl3));
@@ -85,7 +93,8 @@ public final class GenerateShims {
             if (CONTEXT_CAPABILITIES.equals(name)) {
                 writeContextCapabilities(srcDir, lwjgl2.get(name), lwjgl2, lwjgl3, handWrittenNames);
             } else {
-                writePlaceholder(srcDir, lwjgl2, lwjgl3, lwjgl2.get(name), shipped, skippedMembers, generatedConstructors);
+                writePlaceholder(srcDir, lwjgl2, lwjgl3, lwjgl2.get(name), shipped, skippedMembers,
+                        generatedConstructors, nestedPlaceholders);
             }
         }
 
@@ -252,6 +261,28 @@ public final class GenerateShims {
         return !name.startsWith("org/lwjgl/") || shipped.contains(name) || lwjgl3.has(name);
     }
 
+    private static Set<String> publicNestedTypes(ApiIndex lwjgl2, Collection<String> sourceOwners) {
+        Set<String> outers = new HashSet<>(sourceOwners);
+        Set<String> nested = new TreeSet<>();
+        for (ClassNode candidate : lwjgl2.classes().values()) {
+            int separator = candidate.name.lastIndexOf('$');
+            if (separator > 0 && outers.contains(candidate.name.substring(0, separator)) &&
+                    ApiIndex.isCallable(nestedAccess(candidate))) {
+                nested.add(candidate.name);
+            }
+        }
+        return nested;
+    }
+
+    private static int nestedAccess(ClassNode node) {
+        for (InnerClassNode innerClass : node.innerClasses) {
+            if (node.name.equals(innerClass.name)) {
+                return innerClass.access;
+            }
+        }
+        return node.access;
+    }
+
     private static boolean writeConstants(Path srcDir, ClassNode node) throws IOException {
         List<FieldNode> constants = new ArrayList<>();
         for (FieldNode field : node.fields) {
@@ -269,7 +300,7 @@ public final class GenerateShims {
             out.write("package " + packageOf(node.name) + ";\n\n");
             out.write("public interface " + name + " {\n");
             for (FieldNode constant : constants) {
-                out.write("\n    " + Type.getType(constant.desc).getClassName() + " " + constant.name
+                out.write("\n    " + JavaNames.type(Type.getType(constant.desc)) + " " + constant.name
                         + " = " + literal(constant.value, constant.desc) + ";\n");
             }
             out.write("}\n");
@@ -355,7 +386,7 @@ public final class GenerateShims {
             for (String exception : exceptions) {
 
                 if (representable(Type.getObjectType(exception), shipped, lwjgl3)) {
-                    thrown.add(exception.replace('/', '.'));
+                    thrown.add(JavaNames.className(exception));
                 }
             }
         }
@@ -364,7 +395,8 @@ public final class GenerateShims {
 
     private static void writePlaceholder(Path srcDir, ApiIndex lwjgl2, ApiIndex lwjgl3, ClassNode node,
                                          Set<String> shipped, List<String> skippedMembers,
-                                         Map<String, List<Ctor>> generatedConstructors) throws IOException {
+                                         Map<String, List<Ctor>> generatedConstructors,
+                                         Set<String> nestedPlaceholders) throws IOException {
         if ((node.access & Opcodes.ACC_ANNOTATION) != 0 || (node.access & Opcodes.ACC_ENUM) != 0) {
             throw new IllegalStateException("Cannot generate a placeholder for enum/annotation " + node.name);
         }
@@ -387,11 +419,11 @@ public final class GenerateShims {
             String superName = node.superName;
             if (!isInterface && superName != null && !"java/lang/Object".equals(superName) &&
                     representable(Type.getObjectType(superName), shipped, lwjgl3)) {
-                out.write(" extends " + superName.replace('/', '.'));
+                out.write(" extends " + JavaNames.className(superName));
             }
             List<String> interfaces = node.interfaces.stream()
                     .filter(i -> representable(Type.getObjectType(i), shipped, lwjgl3))
-                    .map(i -> i.replace('/', '.'))
+                    .map(JavaNames::className)
                     .toList();
             if (!interfaces.isEmpty()) {
                 out.write((isInterface ? " extends " : " implements ") + String.join(", ", interfaces));
@@ -406,7 +438,7 @@ public final class GenerateShims {
                     skippedMembers.add(node.name + "." + field.name + " : " + field.desc);
                     continue;
                 }
-                writeField(out, field, isInterface);
+                writeField(out, field, isInterface, "    ");
             }
             boolean wroteConstructor = false;
             for (MethodNode method : node.methods) {
@@ -420,7 +452,7 @@ public final class GenerateShims {
                     skippedMembers.add(node.name + "." + method.name + method.desc);
                     continue;
                 }
-                writeMethod(out, lwjgl2, lwjgl3, node, method, isInterface, generatedConstructors, shipped);
+                writeMethod(out, lwjgl2, lwjgl3, node, method, isInterface, generatedConstructors, shipped, "    ");
                 wroteConstructor |= method.name.equals("<init>");
             }
 
@@ -433,13 +465,62 @@ public final class GenerateShims {
                             + superCall.code() + ";\n    }\n");
                 }
             }
+            for (String nestedName : nestedPlaceholders) {
+                if (nestedName.startsWith(node.name + "$") && nestedName.indexOf('$', node.name.length() + 1) < 0) {
+                    writeNestedPlaceholder(out, lwjgl2, lwjgl3, lwjgl2.get(nestedName), shipped,
+                            generatedConstructors);
+                }
+            }
             out.write("}\n");
         }
     }
 
-    private static void writeField(BufferedWriter out, FieldNode field, boolean isInterface) throws IOException {
-        String type = Type.getType(field.desc).getClassName();
-        out.write("\n    ");
+    private static void writeNestedPlaceholder(BufferedWriter out, ApiIndex lwjgl2, ApiIndex lwjgl3,
+                                               ClassNode node, Set<String> shipped,
+                                               Map<String, List<Ctor>> generatedConstructors) throws IOException {
+        boolean isInterface = (node.access & Opcodes.ACC_INTERFACE) != 0;
+        int nestedAccess = nestedAccess(node);
+        out.write("\n    public ");
+        if (!isInterface && (nestedAccess & Opcodes.ACC_STATIC) != 0) {
+            out.write("static ");
+        }
+        if (!isInterface && (node.access & Opcodes.ACC_ABSTRACT) != 0) {
+            out.write("abstract ");
+        }
+        out.write(isInterface ? "interface " : "class ");
+        out.write(JavaNames.simpleName(node.name));
+
+        if (!isInterface && node.superName != null && !"java/lang/Object".equals(node.superName) &&
+                representable(Type.getObjectType(node.superName), shipped, lwjgl3)) {
+            out.write(" extends " + JavaNames.className(node.superName));
+        }
+        List<String> interfaces = node.interfaces.stream()
+                .filter(i -> representable(Type.getObjectType(i), shipped, lwjgl3))
+                .map(JavaNames::className)
+                .toList();
+        if (!interfaces.isEmpty()) {
+            out.write((isInterface ? " extends " : " implements ") + String.join(", ", interfaces));
+        }
+        out.write(" {\n");
+
+        for (FieldNode field : node.fields) {
+            if (ApiIndex.isCallable(field.access) && representable(Type.getType(field.desc), shipped, lwjgl3)) {
+                writeField(out, field, isInterface, "        ");
+            }
+        }
+        for (MethodNode method : node.methods) {
+            if (ApiIndex.isCallable(method.access) && (method.access & Opcodes.ACC_NATIVE) == 0 &&
+                    representable(method.desc, shipped, lwjgl3)) {
+                writeMethod(out, lwjgl2, lwjgl3, node, method, isInterface, generatedConstructors, shipped, "        ");
+            }
+        }
+        out.write("    }\n");
+    }
+
+    private static void writeField(BufferedWriter out, FieldNode field, boolean isInterface,
+                                   String indent) throws IOException {
+        String type = JavaNames.type(Type.getType(field.desc));
+        out.write("\n" + indent);
         if (!isInterface) {
             out.write(((field.access & Opcodes.ACC_PROTECTED) != 0 ? "protected " : "public "));
             if ((field.access & Opcodes.ACC_STATIC) != 0) {
@@ -460,13 +541,13 @@ public final class GenerateShims {
 
     private static void writeMethod(BufferedWriter out, ApiIndex lwjgl2, ApiIndex lwjgl3, ClassNode owner,
                                     MethodNode method, boolean isInterface, Map<String, List<Ctor>> generatedConstructors,
-                                    Set<String> shipped) throws IOException {
+                                    Set<String> shipped, String indent) throws IOException {
         Type type = Type.getMethodType(method.desc);
         Type[] params = type.getArgumentTypes();
         boolean isConstructor = method.name.equals("<init>");
         boolean isAbstract = (method.access & Opcodes.ACC_ABSTRACT) != 0;
 
-        out.write("\n    ");
+        out.write("\n" + indent);
         out.write((method.access & Opcodes.ACC_PROTECTED) != 0 ? "protected " : "public ");
         if ((method.access & Opcodes.ACC_STATIC) != 0) {
             out.write("static ");
@@ -475,16 +556,16 @@ public final class GenerateShims {
             out.write("abstract ");
         }
         if (isConstructor) {
-            out.write(simpleName(owner.name));
+            out.write(JavaNames.simpleName(owner.name));
         } else {
-            out.write(type.getReturnType().getClassName() + " " + method.name);
+            out.write(JavaNames.type(type.getReturnType()) + " " + method.name);
         }
         out.write("(");
         for (int i = 0; i < params.length; i++) {
             if (i > 0) {
                 out.write(", ");
             }
-            out.write(params[i].getClassName() + " p" + i);
+            out.write(JavaNames.type(params[i]) + " p" + i);
         }
         out.write(")");
 
@@ -504,11 +585,11 @@ public final class GenerateShims {
         }
         out.write(" {\n");
         if (superCall != null) {
-            out.write("        " + superCall.code() + ";\n");
+            out.write(indent + "    " + superCall.code() + ";\n");
         }
-        out.write("        throw new UnsupportedOperationException(\""
+        out.write(indent + "    throw new UnsupportedOperationException(\""
                 + owner.name.replace('/', '.') + "." + (isConstructor ? "<init>" : method.name)
-                + " is not implemented by LWJGLY. See build/lwjgly/PROBLEMS.md\");\n    }\n");
+                + " is not implemented by LWJGLY. See build/lwjgly/PROBLEMS.md\");\n" + indent + "}\n");
     }
 
     private static SuperCall superCall(ApiIndex lwjgl2, ApiIndex lwjgl3, ClassNode owner,
@@ -537,7 +618,7 @@ public final class GenerateShims {
         }
         List<String> arguments = new ArrayList<>();
         for (Type param : chosen.params()) {
-            arguments.add("(" + param.getClassName() + ") " + defaultValue(param));
+            arguments.add("(" + JavaNames.type(param) + ") " + defaultValue(param));
         }
         return new SuperCall("super(" + String.join(", ", arguments) + ")", chosen.exceptions());
     }
@@ -548,7 +629,7 @@ public final class GenerateShims {
             if (candidate.name.equals("<init>") && (candidate.access & Opcodes.ACC_PRIVATE) == 0) {
                 List<String> thrown = new ArrayList<>();
                 if (candidate.exceptions != null) {
-                    candidate.exceptions.forEach(e -> thrown.add(e.replace('/', '.')));
+                    candidate.exceptions.forEach(e -> thrown.add(JavaNames.className(e)));
                 }
                 constructors.add(new Ctor(Type.getMethodType(candidate.desc).getArgumentTypes(), thrown));
             }
