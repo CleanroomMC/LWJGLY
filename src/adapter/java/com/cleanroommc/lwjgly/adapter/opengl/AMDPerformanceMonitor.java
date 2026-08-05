@@ -21,16 +21,14 @@ public final class AMDPerformanceMonitor {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             IntBuffer length = stack.mallocInt(1);
             ByteBuffer counterString = stack.malloc(bufSize);
-            org.lwjgl.opengl.AMDPerformanceMonitor.glGetPerfMonitorCounterStringAMD(group, counter,
-                    length, counterString);
+            org.lwjgl.opengl.AMDPerformanceMonitor.glGetPerfMonitorCounterStringAMD(group, counter, length, counterString);
             return MemoryUtil.memASCII(counterString, length.get(0));
         }
     }
 
     public static void glSelectPerfMonitorCountersAMD(int monitor, boolean enable, int group, int counter) {
         try (MemoryStack stack = MemoryStack.stackPush()) {
-            org.lwjgl.opengl.AMDPerformanceMonitor.glSelectPerfMonitorCountersAMD(monitor, enable, group,
-                    stack.ints(counter));
+            org.lwjgl.opengl.AMDPerformanceMonitor.glSelectPerfMonitorCountersAMD(monitor, enable, group, stack.ints(counter));
         }
     }
 
