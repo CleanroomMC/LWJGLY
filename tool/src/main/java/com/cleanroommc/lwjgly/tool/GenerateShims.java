@@ -459,16 +459,13 @@ public final class GenerateShims {
             if (!isInterface && !wroteConstructor) {
                 SuperCall superCall = superCall(lwjgl2, lwjgl3, node, generatedConstructors, shipped);
                 if (superCall != null) {
-                    String thrown = superCall.exceptions().isEmpty()
-                            ? "" : " throws " + String.join(", ", superCall.exceptions());
-                    out.write("\n    protected " + simpleName(node.name) + "()" + thrown + " {\n        "
-                            + superCall.code() + ";\n    }\n");
+                    String thrown = superCall.exceptions().isEmpty() ? "" : " throws " + String.join(", ", superCall.exceptions());
+                    out.write("\n    protected " + simpleName(node.name) + "()" + thrown + " {\n        " + superCall.code() + ";\n    }\n");
                 }
             }
             for (String nestedName : nestedPlaceholders) {
                 if (nestedName.startsWith(node.name + "$") && nestedName.indexOf('$', node.name.length() + 1) < 0) {
-                    writeNestedPlaceholder(out, lwjgl2, lwjgl3, lwjgl2.get(nestedName), shipped,
-                            generatedConstructors);
+                    writeNestedPlaceholder(out, lwjgl2, lwjgl3, lwjgl2.get(nestedName), shipped, generatedConstructors);
                 }
             }
             out.write("}\n");
@@ -517,8 +514,7 @@ public final class GenerateShims {
         out.write("    }\n");
     }
 
-    private static void writeField(BufferedWriter out, FieldNode field, boolean isInterface,
-                                   String indent) throws IOException {
+    private static void writeField(BufferedWriter out, FieldNode field, boolean isInterface, String indent) throws IOException {
         String type = JavaNames.type(Type.getType(field.desc));
         out.write("\n" + indent);
         if (!isInterface) {
