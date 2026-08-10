@@ -159,6 +159,12 @@ def vendoredJar = tasks.register('vendoredJar', Jar) {
     dependsOn 'generateShims'
 }
 
+tasks.register('setup') {
+    group = 'build setup'
+    description = 'Generates IDE sources and the vendored LWJGL 2 compatibility classes'
+    dependsOn 'generateAdapters', vendoredJar
+}
+
 dependencies {
     compileOnly files(vendoredJar)
     adapterCompileOnly files(sourceSets.main.output.classesDirs, vendoredJar)

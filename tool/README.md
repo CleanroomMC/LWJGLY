@@ -48,6 +48,12 @@ And follows superclasses and interfaces to recognize placeholders from bytecode 
 
 ## Pipeline
 
+After importing or refreshing the Gradle project in an IDE, run `setup` to
+generate the shim and adapter sources and package vendored LWJGL 2 classes.
+This lets code analysis resolve compatibility types without running the full build.
+
+`setup` prepares IDE inputs but does not run verification.
+
 Run the full pipeline from the repository root:
 
 ```text
