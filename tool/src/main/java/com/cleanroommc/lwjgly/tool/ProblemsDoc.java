@@ -186,7 +186,7 @@ public final class ProblemsDoc {
                     | `Display.setResizable` / `setLocation` / `getX` / `getY` | No-ops and zeroes | `SDL_SetWindowResizable`, `SDL_SetWindowPosition`, `SDL_GetWindowPosition` |
                     | `Display.getPixelScaleFactor` | Always 1 | The framebuffer-to-logical ratio, and mouse coordinates scaled to match |
                     | `Display.setDisplayConfiguration` | No-op | Nothing: SDL 3 dropped gamma ramps |
-                    | `Display.create(PixelFormat)` | Ignores the format | Nothing: the context already exists, the host chooses its depth and sample buffers |
+                    | `Display.create(PixelFormat, ContextAttribs)` | Validates the request against the adopted host context rather than creating one | Delay the host's SDL window/context creation until this call to honor creation-time attributes exactly |
                     | `Mouse.isInsideWindow` | Always true | Track `SDL_EVENT_WINDOW_MOUSE_ENTER` / `_LEAVE` |
                     | `Mouse.setClipMouseCoordinatesToWindow` | Remembered, not applied | Nothing: SDL confines the pointer while grabbed, which is the case that matters |
                     

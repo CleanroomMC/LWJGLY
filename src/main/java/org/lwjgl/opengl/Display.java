@@ -14,31 +14,168 @@ public class Display {
     private static long nextFrameNanos;
 
     public static void create() throws LWJGLException {
-        LWJGLY.windowBridge().makeCurrent();
+        create(new PixelFormat());
     }
 
     public static void create(PixelFormat pixelFormat) throws LWJGLException {
-        create();
+        create(pixelFormat, null, null);
     }
 
     public static void create(PixelFormat pixelFormat, Drawable sharedDrawable) throws LWJGLException {
-        create();
+        create(pixelFormat, sharedDrawable, null);
     }
 
     public static void create(PixelFormat pixelFormat, ContextAttribs attribs) throws LWJGLException {
-        create();
+        create(pixelFormat, null, attribs);
     }
 
     public static void create(PixelFormat pixelFormat, Drawable sharedDrawable, ContextAttribs attribs) throws LWJGLException {
-        create();
+        if (pixelFormat == null) {
+            throw new NullPointerException("pixelFormat cannot be null");
+        }
+        if (sharedDrawable != null) {
+            throw new LWJGLException("Context sharing cannot be added to Cleanroom's already-created SDL context");
+        }
+        adoptContext(new WindowBridge.ContextRequest(pixelFormatRequest(pixelFormat), contextRequest(attribs)));
     }
 
     public static void create(PixelFormatLWJGL pixelFormat) throws LWJGLException {
-        create();
+        create(pixelFormat, null);
     }
 
     public static void create(PixelFormatLWJGL pixelFormat, Drawable sharedDrawable) throws LWJGLException {
-        create();
+        if (pixelFormat == null) {
+            throw new NullPointerException("pixelFormat cannot be null");
+        }
+        if (pixelFormat instanceof PixelFormat desktopFormat) {
+            create(desktopFormat, sharedDrawable);
+            return;
+        }
+        throw new LWJGLException("Unsupported PixelFormatLWJGL implementation: " + pixelFormat.getClass().getName() +
+                " - OpenGL ES display creation is not bridged");
+    }
+
+    private static WindowBridge.PixelFormatRequest pixelFormatRequest(PixelFormat pixelFormat) {
+        return new WindowBridge.PixelFormatRequest(
+                pixelFormat.getBitsPerPixel(),
+                pixelFormat.getAlphaBits(),
+                pixelFormat.getDepthBits(),
+                pixelFormat.getStencilBits(),
+                pixelFormat.getSamples(),
+                pixelFormat.getColorSamples(),
+                pixelFormat.getAuxBuffers(),
+                pixelFormat.getAccumulationBitsPerPixel(),
+                pixelFormat.getAccumulationAlpha(),
+                pixelFormat.isStereo(),
+                pixelFormat.isFloatingPoint(),
+                pixelFormat.isFloatingPointPacked(),
+                pixelFormat.isSRGB()
+        );
+    }
+
+    private static WindowBridge.ContextAttributesRequest contextRequest(ContextAttribs attribs) throws LWJGLException {
+        if (attribs == null) {
+            return null;
+        }
+        int knownFlags = ContextAttribs.CONTEXT_DEBUG_BIT_ARB
+                | ContextAttribs.CONTEXT_FORWARD_COMPATIBLE_BIT_ARB
+                | ContextAttribs.CONTEXT_ROBUST_ACCESS_BIT_ARB
+                | ContextAttribs.CONTEXT_RESET_ISOLATION_BIT_ARB;
+        if ((attribs.getContextFlags() & ~knownFlags) != 0) {
+            throw new LWJGLException("Unsupported OpenGL context flags: 0x" + Integer.toHexString(attribs.getContextFlags() & ~knownFlags));
+        }
+        WindowBridge.ContextProfile profile;
+        if (attribs.getProfileMask() == 0) {
+            profile = WindowBridge.ContextProfile.DEFAULT;
+        } else if (attribs.isProfileCore()) {
+            profile = WindowBridge.ContextProfile.CORE;
+        } else if (attribs.isProfileCompatibility()) {
+            profile = WindowBridge.ContextProfile.COMPATIBILITY;
+        } else if (attribs.isProfileES()) {
+            profile = WindowBridge.ContextProfile.ES;
+        } else {
+            throw new LWJGLException("Unsupported OpenGL context profile mask: 0x" + Integer.toHexString(attribs.getProfileMask()));
+        }
+
+        WindowBridge.ResetNotification resetNotification;
+        if (attribs.getContextResetNotificationStrategy() == ContextAttribs.NO_RESET_NOTIFICATION_ARB) {
+            resetNotification = WindowBridge.ResetNotification.DEFAULT;
+        } else if (attribs.getContextResetNotificationStrategy() == ContextAttribs.LOSE_CONTEXT_ON_RESET_ARB) {
+            resetNotification = WindowBridge.ResetNotification.LOSE_CONTEXT;
+        } else {
+            throw new LWJGLException("Unsupported context reset notification strategy: 0x" + Integer.toHexString(attribs.getContextResetNotificationStrategy()));
+        }
+
+        WindowBridge.ReleaseBehavior releaseBehavior;
+        if (attribs.getContextReleaseBehavior() == ContextAttribs.CONTEXT_RELEASE_BEHAVIOR_FLUSH_ARB) {
+            releaseBehavior = WindowBridge.ReleaseBehavior.DEFAULT;
+        } else if (attribs.getContextReleaseBehavior() == ContextAttribs.CONTEXT_RELEASE_BEHAVIOR_NONE_ARB) {
+            releaseBehavior = WindowBridge.ReleaseBehavior.NONE;
+        } else {
+            throw new LWJGLException("Unsupported context release behavior: 0x" + Integer.toHexString(attribs.getContextReleaseBehavior()));
+        }
+
+        return new WindowBridge.ContextAttributesRequest(
+                attribs.getMajorVersion(),
+                attribs.getMinorVersion(),
+                profile,
+                attribs.isDebug(),
+                attribs.isForwardCompatible(),
+                attribs.isRobustAccess(),
+                attribs.isContextResetIsolation(),
+                resetNotification,
+                releaseBehavior,
+                attribs.getLayerPlane()
+        );
+    }
+
+    private static void adoptContext(WindowBridge.ContextRequest request) throws LWJGLException {
+        WindowBridge bridge = LWJGLY.windowBridge();
+        long expectedWindow = bridge.handle();
+        if (expectedWindow == 0L) {
+            throw new LWJGLException("The window bridge has no SDL window handle");
+        }
+
+        final WindowBridge.ContextResult result;
+        try {
+            result = bridge.adoptContext(request);
+        } catch (RuntimeException failure) {
+            throw new LWJGLException("Window bridge failed to adopt its SDL OpenGL context", failure);
+        }
+        if (result == null) {
+            throw new LWJGLException("Window bridge returned no context adoption result");
+        }
+
+        boolean contextWasMadeCurrent = result.currentContextHandle() != 0L;
+        if (!result.accepted()) {
+            failContextAdoption(bridge, result.message(), null, contextWasMadeCurrent);
+        }
+        if (result.currentWindowHandle() != expectedWindow) {
+            failContextAdoption(bridge,
+                    "The current SDL OpenGL window does not match the window bridge (expected 0x" + Long.toHexString(expectedWindow) + ", got 0x" + Long.toHexString(result.currentWindowHandle()) + ')',
+                    null, contextWasMadeCurrent);
+        }
+        if (!contextWasMadeCurrent) {
+            failContextAdoption(bridge, "SDL has no current OpenGL context after adoption", null, false);
+        }
+
+        if (!result.capabilitiesBound()) {
+            failContextAdoption(bridge, "LWJGL 3 GL capabilities were not bound during context adoption",
+                    null, true);
+        }
+    }
+
+    private static void failContextAdoption(WindowBridge bridge, String message, Throwable cause,
+                                            boolean releaseContext) throws LWJGLException {
+        LWJGLException failure = cause == null ? new LWJGLException(message) : new LWJGLException(message, cause);
+        if (releaseContext) {
+            try {
+                bridge.releaseContext();
+            } catch (RuntimeException releaseFailure) {
+                failure.addSuppressed(releaseFailure);
+            }
+        }
+        throw failure;
     }
 
     public static boolean isCreated() {

@@ -10,26 +10,21 @@ final class MockWindow implements WindowBridge {
     private final Deque<KeyEvent> keyEvents = new ArrayDeque<>();
     private final Deque<MouseEvent> mouseEvents = new ArrayDeque<>();
 
+    String title = "test";
+    ContextRequest contextRequest;
+    ContextResult contextResult;
+    RuntimeException adoptionFailure;
+    boolean closeRequested, resized, fullscreen, vsync, grabbed, textInput, current;
+    boolean focused = true;
     int width = 854;
     int height = 480;
-    String title = "test";
-    boolean closeRequested;
-    boolean focused = true;
-    boolean resized;
-    boolean fullscreen;
-    boolean vsync;
-    boolean grabbed;
-    boolean textInput;
-    boolean current;
-    int swaps;
-    int pumps;
-    float mouseX;
-    float mouseY;
-    float deltaX;
-    float deltaY;
-    float wheel;
     int downScancode = -1;
     int downButton = -1;
+    int swaps, pumps;
+    float mouseX, mouseY, deltaX, deltaY, wheel;
+    long windowHandle = 0xBEEFL;
+    long contextHandle = 0xCAFEL;
+    long currentWindowHandle = windowHandle;
 
     void pushKey(KeyEvent event) {
         keyEvents.add(event);
@@ -41,7 +36,7 @@ final class MockWindow implements WindowBridge {
 
     @Override
     public long handle() {
-        return 0xBEEFL;
+        return windowHandle;
     }
 
     @Override
@@ -94,6 +89,16 @@ final class MockWindow implements WindowBridge {
     @Override
     public void vsync(boolean vsync) {
         this.vsync = vsync;
+    }
+
+    @Override
+    public ContextResult adoptContext(ContextRequest request) {
+        contextRequest = request;
+        if (adoptionFailure != null) {
+            throw adoptionFailure;
+        }
+        current = true;
+        return contextResult != null ? contextResult : ContextResult.accepted(currentWindowHandle, contextHandle);
     }
 
     @Override

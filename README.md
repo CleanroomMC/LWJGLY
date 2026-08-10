@@ -71,6 +71,11 @@ LWJGLY.setWindowBridge(new CleanroomWindowBridge(com.cleanroommc.client.input.Wi
 
 LWJGL 3 resolves GL entry points per thread, doing one without the other leaves the two disagreeing about which context is live.
 
+`WindowBridge.adoptContext(request)` performs the same binding for `Display.create(...)`, then validates the translated LWJGL 2 request against the current SDL context with `SDL_GL_GetAttribute`.
+Return the actual handles from `SDL_GL_GetCurrentWindow()` and `SDL_GL_GetCurrentContext()` in `ContextResult`.
+Pixel-format values are minimum requirements - an explicit profile must match and all requested context flags must be present.
+Reject SDL-unsupported non-default requests (auxiliary buffers, NV coverage color samples, packed floating point and layer planes) rather than silently accepting them.
+
 ## Building and Contributing
 
 See: `tool/README.md`
