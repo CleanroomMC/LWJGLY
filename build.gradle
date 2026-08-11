@@ -9,6 +9,7 @@ version = '1.0.0'
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 sourceSets {
+    spi // Host integration API and class-loading hook
     adapter // Method bodies merged into LWJGL 3 classes at runtime
     legacyFixture // LWJGL 2 fixture for testing
 }
@@ -24,11 +25,32 @@ configurations {
         canBeResolved = true
     }
     legacyFixtureCompileOnly.extendsFrom(lwjgl2)
+    spiImplementation.extendsFrom(api)
     adapterCompileOnly.extendsFrom(lwjgl3)
 }
 
 def lwjgl3Bom = 'org.lwjgl:lwjgl-bom:3.4.2'
 def lwjgl3Modules = ['org.lwjgl:lwjgl', 'org.lwjgl:lwjgl-opengl', 'org.lwjgl:lwjgl-openal', 'org.lwjgl:lwjgl-sdl']
+def osName = System.getProperty('os.name').toLowerCase()
+def osArch = System.getProperty('os.arch').toLowerCase()
+def testNativesClassifier = switch (osName) {
+    case { it.contains('win') } -> switch (osArch) {
+        case ['x86', 'i386', 'i486', 'i586', 'i686'] -> 'natives-windows-x86'
+        case ['aarch64', 'arm64'] -> 'natives-windows-arm64'
+        default -> 'natives-windows'
+    }
+    case { it.contains('mac') || it.contains('darwin') } ->
+        osArch in ['aarch64', 'arm64'] ? 'natives-macos-arm64' : 'natives-macos'
+    case { it.contains('freebsd') } -> 'natives-freebsd'
+    case { it.contains('linux') } -> switch (osArch) {
+        case ['aarch64', 'arm64'] -> 'natives-linux-arm64'
+        case { it.startsWith('arm') } -> 'natives-linux-arm32'
+        case ['ppc64le', 'powerpc64le'] -> 'natives-linux-ppc64le'
+        case ['riscv64'] -> 'natives-linux-riscv64'
+        default -> 'natives-linux'
+    }
+    default -> throw new GradleException("Unsupported test platform: ${osName} ${osArch}")
+}
 // 1.12.2's LWJGL 2
 def lwjgl2Version = '2.9.4-nightly-20150209'
 FileCollection lwjgl2Files = configurations.lwjgl2
@@ -65,9 +87,9 @@ dependencies {
     lwjgl3Modules.each {
         testImplementation it
     }
-    testRuntimeOnly 'org.lwjgl:lwjgl::natives-windows'
-    testRuntimeOnly 'org.lwjgl:lwjgl-sdl::natives-windows'
-    testRuntimeOnly 'org.lwjgl:lwjgl-openal::natives-windows'
+    lwjgl3Modules.each {
+        testRuntimeOnly "${it}::${testNativesClassifier}"
+    }
 }
 
 compileAdapterJava {
@@ -166,9 +188,11 @@ tasks.register('setup') {
 }
 
 dependencies {
+    compileOnly sourceSets.spi.output
     compileOnly files(vendoredJar)
+    testImplementation sourceSets.spi.output
     testCompileOnly files(vendoredJar)
-    adapterCompileOnly files(sourceSets.main.output.classesDirs, vendoredJar)
+    adapterCompileOnly files(sourceSets.main.output.classesDirs, sourceSets.spi.output, vendoredJar)
 }
 
 // Adapters ship as resources, not as classes.
@@ -295,51 +319,48 @@ test {
     inputs.files(fileTree(fixtureClassesDir))
 }
 
-def apiJar = tasks.register('apiJar', Jar) {
+tasks.named('jar') {
+    from(sourceSets.spi.output)
+}
+
+def spiJar = tasks.register('spiJar', Jar) {
     group = 'build'
     description = 'Class-loading hook and the window SPI portion of LWJGLY'
-    from(sourceSets.main.output) {
-        include 'com/cleanroommc/lwjgly/LWJGLY.class'
-        include 'com/cleanroommc/lwjgly/LWJGLYTransformer.class'
-        include 'com/cleanroommc/lwjgly/spi/**'
-    }
-    archiveBaseName = 'lwjgly-api'
+    from(sourceSets.spi.output)
+    archiveBaseName = 'lwjgly-spi'
 }
 
 tasks.named('assemble') {
-    dependsOn apiJar
+    dependsOn spiJar
 }
 
-tasks.register('verifyApiJar') {
+tasks.register('verifySpiJar') {
     group = 'verification'
-    description = 'Checks that the dependency-free API artifact contains no runtime internals'
-    inputs.file(apiJar.flatMap { it.archiveFile })
+    description = 'Checks that the SPI artifact contains only the SPI source set classes'
+    inputs.files(sourceSets.spi.output.classesDirs)
+    inputs.file(spiJar.flatMap { it.archiveFile })
     doLast {
-        def classes = new java.util.zip.ZipFile(inputs.files.singleFile).withCloseable { zip ->
+        def archive = inputs.files.files.find { it.isFile() && it.name.endsWith('.jar') }
+        def classes = new java.util.zip.ZipFile(archive).withCloseable { zip ->
             zip.entries().findAll { !it.directory && it.name.endsWith('.class') }.collect { it.name }.sort()
         }
-        def allowed = [
-                'com/cleanroommc/lwjgly/LWJGLY.class',
-                'com/cleanroommc/lwjgly/LWJGLYTransformer.class',
-                'com/cleanroommc/lwjgly/spi/WindowBridge.class',
-                'com/cleanroommc/lwjgly/spi/WindowBridge$ContextAttributesRequest.class',
-                'com/cleanroommc/lwjgly/spi/WindowBridge$ContextProfile.class',
-                'com/cleanroommc/lwjgly/spi/WindowBridge$ContextRequest.class',
-                'com/cleanroommc/lwjgly/spi/WindowBridge$ContextResult.class',
-                'com/cleanroommc/lwjgly/spi/WindowBridge$KeyEvent.class',
-                'com/cleanroommc/lwjgly/spi/WindowBridge$MouseEvent.class',
-                'com/cleanroommc/lwjgly/spi/WindowBridge$PixelFormatRequest.class',
-                'com/cleanroommc/lwjgly/spi/WindowBridge$ReleaseBehavior.class',
-                'com/cleanroommc/lwjgly/spi/WindowBridge$ResetNotification.class',
-        ].sort()
-        if (classes != allowed) {
-            throw new GradleException("Unexpected classes in lwjgly-api: ${classes - allowed}. Missing: ${allowed - classes}")
+        def expected = inputs.files.files.findAll { it.isDirectory() }.collectMany { root ->
+            def found = []
+            root.eachFileRecurse(groovy.io.FileType.FILES) {
+                if (it.name.endsWith('.class')) {
+                    found << root.toPath().relativize(it.toPath()).toString().replace(File.separator, '/')
+                }
+            }
+            found
+        }.sort()
+        if (classes != expected) {
+            throw new GradleException("Unexpected classes in lwjgly-spi: ${classes - expected}. Missing: ${expected - classes}")
         }
     }
 }
 
 tasks.named('check') {
-    dependsOn 'checkSplitPackage', 'verifyAdapters', 'verifyConversions', 'verifyCoverage', 'verifyApiJar'
+    dependsOn 'checkSplitPackage', 'verifyAdapters', 'verifyConversions', 'verifyCoverage', 'verifySpiJar'
 }
 
 publishing {
@@ -359,11 +380,11 @@ publishing {
                 }
             }
         }
-        create('api', MavenPublication) {
-            artifact apiJar
-            artifactId = 'lwjgly-api'
+        create('spi', MavenPublication) {
+            artifact spiJar
+            artifactId = 'lwjgly-spi'
             pom {
-                name = 'LWJGLY API'
+                name = 'LWJGLY SPI'
                 description = "Class-loading hook and the window SPI portion of LWJGLY"
                 url = 'https://github.com/CleanroomMC/LWJGLY'
                 licenses {

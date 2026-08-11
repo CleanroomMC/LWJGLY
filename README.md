@@ -30,7 +30,7 @@ The last rule is tried after genuine short spellings, so a real short method is 
 ## Artifacts and Usages
 
 `com.cleanroommc:lwjgly`: runtime portion, shims and adapters.
-`com.cleanroommc:lwjgly-api`: compile portion, bridges.
+`com.cleanroommc:lwjgly-spi`: compile portion, bridges.
 
 ```groovy
 repositories {
@@ -41,7 +41,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly 'com.cleanroommc:lwjgly-api:1.0.0'
+    compileOnly 'com.cleanroommc:lwjgly-spi:1.0.0'
     runtimeOnly 'com.cleanroommc:lwjgly:1.0.0'
 }
 ```
