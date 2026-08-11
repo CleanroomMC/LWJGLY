@@ -49,7 +49,10 @@ def testNativesClassifier = switch (osName) {
         case ['riscv64'] -> 'natives-linux-riscv64'
         default -> 'natives-linux'
     }
-    default -> throw new GradleException("Unsupported test platform: ${osName} ${osArch}")
+    default -> null
+}
+if (testNativesClassifier == null) {
+    logger.warn("Unsupported test platform: ${osName} ${osArch}; test natives will not be added")
 }
 // 1.12.2's LWJGL 2
 def lwjgl2Version = '2.9.4-nightly-20150209'
@@ -87,8 +90,10 @@ dependencies {
     lwjgl3Modules.each {
         testImplementation it
     }
-    lwjgl3Modules.each {
-        testRuntimeOnly "${it}::${testNativesClassifier}"
+    if (testNativesClassifier != null) {
+        lwjgl3Modules.each {
+            testRuntimeOnly "${it}::${testNativesClassifier}"
+        }
     }
 }
 
