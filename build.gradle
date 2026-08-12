@@ -54,6 +54,8 @@ def testNativesClassifier = switch (osName) {
 if (testNativesClassifier == null) {
     logger.warn("Unsupported test platform: ${osName} ${osArch}; test natives will not be added")
 }
+// The merger in the SPI reads and rewrites bytecode
+def asmModules = ['org.ow2.asm:asm', 'org.ow2.asm:asm-tree', 'org.ow2.asm:asm-commons']
 // 1.12.2's LWJGL 2
 def lwjgl2Version = '2.9.4-nightly-20150209'
 FileCollection lwjgl2Files = configurations.lwjgl2
@@ -71,9 +73,9 @@ dependencies {
 
     tool project(':tool')
 
-    api 'org.ow2.asm:asm:9.8'
-    api 'org.ow2.asm:asm-tree:9.8'
-    api 'org.ow2.asm:asm-commons:9.8'
+    asmModules.each {
+        api "${it}:9.8"
+    }
 
     compileOnly platform(lwjgl3Bom)
     lwjgl3Modules.each {
@@ -369,6 +371,16 @@ tasks.named('check') {
 }
 
 publishing {
+    repositories {
+        maven {
+            name = 'Cleanroom'
+            url = project.findProperty('CleanroomRepo') ?: 'https://repo.cleanroommc.com/releases'
+            credentials(PasswordCredentials)
+            authentication {
+                basic(BasicAuthentication)
+            }
+        }
+    }
     publications {
         create('maven', MavenPublication) {
             from components.java
@@ -389,6 +401,17 @@ publishing {
             artifact spiJar
             artifactId = 'lwjgly-spi'
             pom {
+                withXml {
+                    def dependencies = asNode().appendNode('dependencies')
+                    asmModules.each { module ->
+                        def (moduleGroup, moduleName, moduleVersion) = module.split(':')
+                        def dependency = dependencies.appendNode('dependency')
+                        dependency.appendNode('groupId', moduleGroup)
+                        dependency.appendNode('artifactId', moduleName)
+                        dependency.appendNode('version', moduleVersion)
+                        dependency.appendNode('scope', 'compile')
+                    }
+                }
                 name = 'LWJGLY SPI'
                 description = "Class-loading hook and the window SPI portion of LWJGLY"
                 url = 'https://github.com/CleanroomMC/LWJGLY'
