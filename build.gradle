@@ -56,6 +56,7 @@ if (testNativesClassifier == null) {
 }
 // The merger in the SPI reads and rewrites bytecode
 def asmModules = ['org.ow2.asm:asm', 'org.ow2.asm:asm-tree', 'org.ow2.asm:asm-commons']
+def asmVersion = '9.8'
 // 1.12.2's LWJGL 2
 def lwjgl2Version = '2.9.4-nightly-20150209'
 FileCollection lwjgl2Files = configurations.lwjgl2
@@ -74,7 +75,7 @@ dependencies {
     tool project(':tool')
 
     asmModules.each {
-        api "${it}:9.8"
+        api "${it}:${asmVersion}"
     }
 
     compileOnly platform(lwjgl3Bom)
@@ -404,11 +405,11 @@ publishing {
                 withXml {
                     def dependencies = asNode().appendNode('dependencies')
                     asmModules.each { module ->
-                        def (moduleGroup, moduleName, moduleVersion) = module.split(':')
+                        def (moduleGroup, moduleName) = module.split(':')
                         def dependency = dependencies.appendNode('dependency')
                         dependency.appendNode('groupId', moduleGroup)
                         dependency.appendNode('artifactId', moduleName)
-                        dependency.appendNode('version', moduleVersion)
+                        dependency.appendNode('version', asmVersion)
                         dependency.appendNode('scope', 'compile')
                     }
                 }
