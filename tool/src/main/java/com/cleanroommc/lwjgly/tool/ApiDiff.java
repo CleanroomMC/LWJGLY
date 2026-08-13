@@ -256,24 +256,24 @@ public final class ApiDiff {
     private boolean unavailable(String owner, String name, String desc, boolean field, Set<String> vendorable,
                                 String self, Map<String, Delta.ClassDelta> deltas) {
         if (owner.equals(self)) {
-            return true;
+            return false;
         }
         if (field ? Resolution.findField(lwjgl3, owner, name, desc) != null
                 : Resolution.hasMethod(lwjgl3, owner, name, desc)) {
-            return true;
+            return false;
         }
 
         if (vendorable.contains(owner)) {
-            return true;
+            return false;
         }
 
         if (!field) {
             Delta.ClassDelta delta = deltas.get(owner);
             if (delta != null && delta.bucket() == Delta.Bucket.INJECT) {
                 return delta.methods().stream()
-                        .anyMatch(m -> m.name().equals(name) && m.desc().equals(desc) && m.fix().isImplementable());
+                        .noneMatch(m -> m.name().equals(name) && m.desc().equals(desc) && m.fix().isImplementable());
             }
         }
-        return false;
+        return true;
     }
 }

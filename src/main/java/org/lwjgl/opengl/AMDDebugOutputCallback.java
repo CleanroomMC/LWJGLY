@@ -11,6 +11,7 @@ public final class AMDDebugOutputCallback extends PointerWrapperAbstract {
     }
 
     public AMDDebugOutputCallback(Handler handler) {
+        super(1L);
         this.handler = handler;
     }
 

@@ -11,6 +11,7 @@ public final class KHRDebugCallback extends PointerWrapperAbstract {
     }
 
     public KHRDebugCallback(Handler handler) {
+        super(1L);
         this.handler = handler;
     }
 

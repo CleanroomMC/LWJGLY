@@ -4,15 +4,8 @@ import org.lwjgl.PointerWrapperAbstract;
 
 public final class GLSync extends PointerWrapperAbstract {
 
-    private final long pointer;
-
     GLSync(long pointer) {
-        this.pointer = pointer;
-    }
-
-    @Override
-    public long getPointer() {
-        return pointer;
+        super(pointer);
     }
 
     @Override

@@ -11,6 +11,7 @@ public final class ARBDebugOutputCallback extends PointerWrapperAbstract {
     }
 
     public ARBDebugOutputCallback(Handler handler) {
+        super(1L);
         this.handler = handler;
     }
 

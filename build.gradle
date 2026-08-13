@@ -6,7 +6,13 @@ plugins {
 group = 'com.cleanroommc'
 version = '1.0.0'
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    withSourcesJar()
+}
 
 sourceSets {
     spi // Host integration API and class-loading hook
@@ -331,6 +337,13 @@ tasks.named('jar') {
     from(sourceSets.spi.output)
 }
 
+tasks.named('sourcesJar') {
+    from(sourceSets.spi.allSource)
+    from(sourceSets.adapter.allSource)
+    exclude '**/*.class'
+    includeEmptyDirs = false
+}
+
 def spiJar = tasks.register('spiJar', Jar) {
     group = 'build'
     description = 'Class-loading hook and the window SPI portion of LWJGLY'
@@ -338,8 +351,16 @@ def spiJar = tasks.register('spiJar', Jar) {
     archiveBaseName = 'lwjgly-spi'
 }
 
+def spiSourcesJar = tasks.register('spiSourcesJar', Jar) {
+    group = 'build'
+    description = 'Sources for the SPI artifact'
+    from(sourceSets.spi.allSource)
+    archiveBaseName = 'lwjgly-spi'
+    archiveClassifier = 'sources'
+}
+
 tasks.named('assemble') {
-    dependsOn spiJar
+    dependsOn spiJar, spiSourcesJar
 }
 
 tasks.register('verifySpiJar') {
@@ -400,6 +421,7 @@ publishing {
         }
         create('spi', MavenPublication) {
             artifact spiJar
+            artifact spiSourcesJar
             artifactId = 'lwjgly-spi'
             pom {
                 withXml {
