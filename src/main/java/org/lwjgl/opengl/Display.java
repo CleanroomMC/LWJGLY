@@ -13,6 +13,34 @@ import java.nio.ByteBuffer;
 /** LWJGL 2 display API over the window and GL context owned by Cleanroom. */
 public class Display {
 
+    private static final Drawable DRAWABLE = new Drawable() {
+
+        @Override
+        public boolean isCurrent() throws LWJGLException {
+            return Display.isCurrent();
+        }
+
+        @Override
+        public void makeCurrent() throws LWJGLException {
+            Display.makeCurrent();
+        }
+
+        @Override
+        public void releaseContext() throws LWJGLException {
+            Display.releaseContext();
+        }
+
+        @Override
+        public void destroy() {
+            Display.destroy();
+        }
+
+        @Override
+        public void setCLSharingProperties(org.lwjgl.PointerBuffer properties) throws LWJGLException {
+            throw new LWJGLException("OpenCL context sharing is not supported");
+        }
+    };
+
     private static long nextFrameNanos;
 
     public static void create() throws LWJGLException {
@@ -255,9 +283,8 @@ public class Display {
         }
     }
 
-    /** Always null. LWJGL 2's {@code Drawable} has no LWJGL 3 counterpart, see build/lwjgly/PROBLEMS.md. */
     public static Drawable getDrawable() {
-        return null;
+        return DRAWABLE;
     }
 
     public static String getTitle() {

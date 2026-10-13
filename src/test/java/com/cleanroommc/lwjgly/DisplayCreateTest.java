@@ -161,6 +161,15 @@ class DisplayCreateTest {
     }
 
     @Test
+    void drawableHandsOffTheDisplayContext() throws Exception {
+        Display.getDrawable().makeCurrent();
+        assertTrue(bridge.current);
+
+        Display.getDrawable().releaseContext();
+        assertFalse(bridge.current);
+    }
+
+    @Test
     void rejectUnknownPixelFormat() {
         PixelFormatLWJGL unknown = new PixelFormatLWJGL() { };
 
