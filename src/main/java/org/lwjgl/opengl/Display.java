@@ -185,7 +185,9 @@ public class Display {
     }
 
     public static void destroy() {
-        LWJGLY.windowBridge().releaseContext();
+        if (LWJGLY.hasWindowBridge()) {
+            LWJGLY.windowBridge().releaseContext();
+        }
     }
 
     public static void update() {
