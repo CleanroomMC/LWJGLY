@@ -4,6 +4,8 @@ import com.cleanroommc.lwjgly.LWJGLY;
 import com.cleanroommc.lwjgly.spi.WindowBridge;
 import org.lwjgl.LWJGLException;
 import org.lwjgl.input.Mouse;
+import org.lwjgl.sdl.SDLVideo;
+import org.lwjgl.sdl.SDL_DisplayMode;
 
 import java.awt.*;
 import java.nio.ByteBuffer;
@@ -319,12 +321,20 @@ public class Display {
     }
 
     public static DisplayMode getDisplayMode() {
+        if (!LWJGLY.hasWindowBridge()) {
+            return getDesktopDisplayMode();
+        }
         WindowBridge bridge = LWJGLY.windowBridge();
         return new DisplayMode(bridge.width(), bridge.height());
     }
 
     public static DisplayMode getDesktopDisplayMode() {
-        return getDisplayMode();
+        SDL_DisplayMode mode = SDLVideo.SDL_GetDesktopDisplayMode(SDLVideo.SDL_GetPrimaryDisplay());
+        if (mode != null) {
+            return new DisplayMode(mode.w(), mode.h());
+        }
+        WindowBridge bridge = LWJGLY.windowBridge();
+        return new DisplayMode(bridge.width(), bridge.height());
     }
 
     public static DisplayMode[] getAvailableDisplayModes() throws LWJGLException {
