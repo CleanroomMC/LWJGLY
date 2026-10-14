@@ -36,11 +36,11 @@ public final class GenerateShims {
         Path handWritten = Paths.get(args[4]);
         Path nativeCalls = Paths.get(args[5]);
 
-        Map<String, Delta.ClassDelta> deltas = ApiDiff.diff(lwjgl2, lwjgl3);
+        Set<String> handWrittenNames = handWritten(handWritten);
+        Map<String, Delta.ClassDelta> deltas = ApiDiff.diff(lwjgl2, lwjgl3, handWrittenNames);
         clean(srcDir);
         clean(classDir);
 
-        Set<String> handWrittenNames = handWritten(handWritten);
         Set<String> vendored = new TreeSet<>();
         List<String> placeheld = new ArrayList<>();
         List<String> skippedInternal = new ArrayList<>();
@@ -90,6 +90,8 @@ public final class GenerateShims {
         Set<String> sourceOwners = new TreeSet<>(placeheld);
         sourceOwners.addAll(handWrittenNames);
         vendored.removeAll(publicNestedTypes(lwjgl2, sourceOwners));
+        // A nested class outlives its outer here only as dead weight, and can collide with a handwritten outer's own
+        vendored.removeIf(name -> name.indexOf('$') > 0 && !vendored.contains(name.substring(0, name.indexOf('$'))));
 
         Map<String, List<Ctor>> generatedConstructors = new TreeMap<>();
         for (String name : placeheld) {

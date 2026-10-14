@@ -13,15 +13,18 @@ import java.util.*;
 public final class ApiDiff {
 
     private static final String LWJGL_PREFIX = "org/lwjgl/";
+    private static final String CONTEXT_CAPABILITIES = "org/lwjgl/opengl/ContextCapabilities";
 
     private final ApiIndex lwjgl2;
     private final ApiIndex lwjgl3;
     private final PointerHandles handles;
+    private final Set<String> handWritten;
 
-    private ApiDiff(ApiIndex lwjgl2, ApiIndex lwjgl3) {
+    private ApiDiff(ApiIndex lwjgl2, ApiIndex lwjgl3, Set<String> handWritten) {
         this.lwjgl2 = lwjgl2;
         this.lwjgl3 = lwjgl3;
         this.handles = PointerHandles.in(lwjgl2);
+        this.handWritten = handWritten;
     }
 
     public static void main(String[] args) throws IOException {
@@ -45,7 +48,12 @@ public final class ApiDiff {
     }
 
     public static Map<String, Delta.ClassDelta> diff(ApiIndex lwjgl2, ApiIndex lwjgl3) {
-        return new ApiDiff(lwjgl2, lwjgl3).run();
+        return diff(lwjgl2, lwjgl3, Set.of());
+    }
+
+    /** @param handWritten LWJGL 2 classes LWJGLY implements by hand, which a vendored body may call into */
+    public static Map<String, Delta.ClassDelta> diff(ApiIndex lwjgl2, ApiIndex lwjgl3, Set<String> handWritten) {
+        return new ApiDiff(lwjgl2, lwjgl3, handWritten).run();
     }
 
     private static List<String> rawEntryPoints(String name, String desc) {
@@ -193,6 +201,10 @@ public final class ApiDiff {
         }
 
         Map<String, List<String>> rejections = new LinkedHashMap<>();
+        // LWJGLY generates its own ContextCapabilities, so nothing may lean on LWJGL 2's internals of it
+        if (vendorable.remove(CONTEXT_CAPABILITIES)) {
+            rejections.put(CONTEXT_CAPABILITIES, List.of("generated from LWJGL 3's GLCapabilities"));
+        }
         boolean changed = true;
         while (changed) {
             changed = false;
@@ -246,7 +258,7 @@ public final class ApiDiff {
         }
 
         if (node.superName != null && node.superName.startsWith(LWJGL_PREFIX)
-                && !lwjgl3.has(node.superName) && !vendorable.contains(node.superName)) {
+                && !lwjgl3.has(node.superName) && !vendorable.contains(node.superName) && !handWritten.contains(node.superName)) {
             reasons.add("extends " + node.superName + ", which is not vendorable");
         }
         unresolved.forEach(u -> reasons.add("references " + u + ", gone from LWJGL 3"));
@@ -263,7 +275,7 @@ public final class ApiDiff {
             return false;
         }
 
-        if (vendorable.contains(owner)) {
+        if (vendorable.contains(owner) || handWritten.contains(owner)) {
             return false;
         }
 
