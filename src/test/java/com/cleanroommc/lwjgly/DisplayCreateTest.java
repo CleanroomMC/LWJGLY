@@ -7,12 +7,16 @@ import org.lwjgl.LWJGLException;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.opengl.ContextAttribs;
 import org.lwjgl.opengl.Display;
+import org.lwjgl.opengl.DisplayMode;
 import org.lwjgl.opengl.Drawable;
 import org.lwjgl.opengl.Pbuffer;
 import org.lwjgl.opengl.PixelFormat;
 import org.lwjgl.opengl.PixelFormatLWJGL;
 import org.lwjgl.opengl.RenderTexture;
 import org.lwjgl.opengl.SharedDrawable;
+import org.lwjgl.sdl.SDLVideo;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -186,6 +190,33 @@ class DisplayCreateTest {
 
         drawable.destroy();
         assertTrue(bridge.sharedContext.closed);
+    }
+
+    @Test
+    void displayModesComeFromTheBridgeAndApplyThroughIt() throws Exception {
+        bridge.videoModes = List.of(new WindowBridge.VideoMode(1920, 1080, 32, 60), new WindowBridge.VideoMode(1280, 720, 32, 144));
+        DisplayMode[] modes = Display.getAvailableDisplayModes();
+        assertEquals(2, modes.length);
+        assertEquals(144, modes[1].getFrequency());
+        assertTrue(modes[1].isFullscreenCapable());
+
+        Display.setDisplayModeAndFullscreen(modes[1]);
+        assertEquals(new WindowBridge.VideoMode(1280, 720, 32, 144), bridge.fullscreenMode);
+
+        Display.setDisplayMode(new DisplayMode(640, 480));
+        assertFalse(bridge.fullscreen);
+        assertEquals(640, Display.getWidth());
+        assertEquals(480, Display.getHeight());
+    }
+
+    @Test
+    void minusOneLocationCentresTheWindow() {
+        Display.setLocation(-1, -1);
+        assertEquals(SDLVideo.SDL_WINDOWPOS_CENTERED, bridge.x);
+        assertEquals(SDLVideo.SDL_WINDOWPOS_CENTERED, bridge.y);
+        Display.setLocation(5, 7);
+        assertEquals(5, Display.getX());
+        assertEquals(7, Display.getY());
     }
 
     @Test

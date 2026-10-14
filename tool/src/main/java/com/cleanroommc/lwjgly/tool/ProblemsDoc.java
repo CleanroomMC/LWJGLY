@@ -180,16 +180,10 @@ public final class ProblemsDoc {
                     
                     | Member | What it does instead | What it would take |
                     |---|---|---|
-                    | `Display.setIcon` | Returns 0, using no icon | Build `SDL_Surface`s from the RGBA buffers, chain by size, `SDL_SetWindowIcon` |
-                    | `Display.getAvailableDisplayModes` | Returns only the current mode, so the video settings list has one entry | `SDL_GetFullscreenDisplayModes`, exposed through the window bridge |
-                    | `Display.isVisible` | Always true | Track `SDL_EVENT_WINDOW_MINIMIZED` / `_EXPOSED` |
-                    | `Display.isDirty` | Always false | Nothing: SDL has no "dirty" flag, and nothing in 1.12.2 reads it(?) |
-                    | `Display.setResizable` / `setLocation` / `getX` / `getY` | No-ops and zeroes | `SDL_SetWindowResizable`, `SDL_SetWindowPosition`, `SDL_GetWindowPosition` |
-                    | `Display.getPixelScaleFactor` | Always 1 | The framebuffer-to-logical ratio, and mouse coordinates scaled to match |
+                    | `Display.getPixelScaleFactor` | Always 1 | Nothing while sizes and mouse coordinates are reported in pixels, as LWJGL 2 did without HiDPI |
                     | `Display.setDisplayConfiguration` | No-op | Nothing: SDL 3 dropped gamma ramps |
                     | `Display.create(PixelFormat, ContextAttribs)` | Validates the request against the adopted host context rather than creating one | Delay the host's SDL window/context creation until this call to honor creation-time attributes exactly |
-                    | `Mouse.isInsideWindow` | Always true | Track `SDL_EVENT_WINDOW_MOUSE_ENTER` / `_LEAVE` |
-                    | `Mouse.setClipMouseCoordinatesToWindow` | Remembered, not applied | Nothing: SDL confines the pointer while grabbed, which is the case that matters |
+                    | `Pbuffer` | Renders into a framebuffer object, single-sampled, without render to texture | Multisampled renderbuffers resolved on read, and render to texture over the colour attachment |
                     
                     These do throw, because there is no sensible answer and nothing on 1.12.2 calls them:
                     `Display.setParent`, `GLContext.useContext`.
@@ -264,7 +258,7 @@ public final class ProblemsDoc {
     private static void writeCapabilityGaps(BufferedWriter out, ApiIndex lwjgl2, ApiIndex lwjgl3, Built built)
             throws IOException {
         CapabilityFlags.Split split = CapabilityFlags.of(lwjgl2, lwjgl3, serviced(lwjgl2, lwjgl3, built));
-        if (split.total() == 0) {
+        if (split.alwaysFalse().isEmpty()) {
             return;
         }
 

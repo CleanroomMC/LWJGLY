@@ -1,5 +1,7 @@
 package com.cleanroommc.lwjgly.spi;
 
+import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -258,6 +260,103 @@ public interface WindowBridge {
      * @return {@code true} when pointer grabbing is active
      */
     boolean mouseGrabbed();
+
+    /**
+     * Reports whether the pointer is over the window's client area.
+     *
+     * @return {@code true} while the pointer is inside the window
+     */
+    boolean mouseInside();
+
+    /**
+     * Returns the x coordinate of the window's top-left corner on the desktop, in SDL coordinate units.
+     *
+     * @return the window's x position
+     */
+    int x();
+
+    /**
+     * Returns the y coordinate of the window's top-left corner on the desktop, in SDL coordinate units.
+     *
+     * @return the window's y position
+     */
+    int y();
+
+    /**
+     * Requests that the host move the window.
+     *
+     * @param x the new x position, or SDL's {@code SDL_WINDOWPOS_CENTERED}
+     * @param y the new y position, or SDL's {@code SDL_WINDOWPOS_CENTERED}
+     */
+    void position(int x, int y);
+
+    /**
+     * Requests that the host resize the window while it is windowed.
+     *
+     * @param width the new client-area width in the units {@link #width()} reports
+     * @param height the new client-area height in the units {@link #height()} reports
+     */
+    void size(int width, int height);
+
+    /**
+     * Reports whether the user can resize the window.
+     *
+     * @return {@code true} when the window is resizable
+     */
+    boolean resizable();
+
+    /**
+     * Requests that the host allow or forbid resizing the window.
+     *
+     * @param resizable {@code true} to allow resizing
+     */
+    void resizable(boolean resizable);
+
+    /**
+     * Reports whether the window is shown and not minimized.
+     *
+     * @return {@code true} when the window can be seen
+     */
+    boolean visible();
+
+    /**
+     * Consumes the host's expose notification.
+     *
+     * @return {@code true} once after the window system asked for a repaint, then {@code false} until it asks again
+     */
+    boolean consumeExposed();
+
+    /**
+     * Sets the window icon.
+     *
+     * @param icons square RGBA images, each {@code 4 * side * side} bytes from its position
+     * @return how many of the images the host used
+     */
+    int icon(ByteBuffer... icons);
+
+    /**
+     * Lists the exclusive fullscreen modes of the display the window is on.
+     *
+     * @return the modes, or an empty list when the host cannot enumerate them
+     */
+    List<VideoMode> videoModes();
+
+    /**
+     * Requests exclusive fullscreen in {@code mode}, one of {@link #videoModes()}.
+     *
+     * @param mode the mode to switch the display to
+     */
+    void fullscreen(VideoMode mode);
+
+    /**
+     * A display mode, in the units {@link #width()} and {@link #height()} report.
+     *
+     * @param width the mode's width
+     * @param height the mode's height
+     * @param bitsPerPixel the colour depth
+     * @param refreshRate the refresh rate in Hz, or {@code 0} if unknown
+     */
+    record VideoMode(int width, int height, int bitsPerPixel, int refreshRate) { }
 
     /**
      * Creates a GL context that shares objects with the host's, backing LWJGL 2's {@code SharedDrawable}.

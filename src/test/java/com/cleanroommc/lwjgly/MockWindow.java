@@ -2,8 +2,10 @@ package com.cleanroommc.lwjgly;
 
 import com.cleanroommc.lwjgly.spi.WindowBridge;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.List;
 
 final class MockWindow implements WindowBridge {
 
@@ -26,6 +28,12 @@ final class MockWindow implements WindowBridge {
     long contextHandle = 0xCAFEL;
     long currentWindowHandle = windowHandle;
     MockSharedContext sharedContext;
+    int x, y;
+    boolean resizable, exposed;
+    boolean visible = true;
+    boolean mouseInside = true;
+    VideoMode fullscreenMode;
+    List<VideoMode> videoModes = List.of();
 
     final class MockSharedContext implements SharedContext {
 
@@ -137,6 +145,71 @@ final class MockWindow implements WindowBridge {
     @Override
     public void releaseContext() {
         current = false;
+    }
+
+    @Override
+    public boolean mouseInside() {
+        return mouseInside;
+    }
+
+    @Override
+    public boolean resizable() {
+        return resizable;
+    }
+
+    @Override
+    public void resizable(boolean resizable) {
+        this.resizable = resizable;
+    }
+
+    @Override
+    public boolean visible() {
+        return visible;
+    }
+
+    @Override
+    public boolean consumeExposed() {
+        boolean value = exposed;
+        exposed = false;
+        return value;
+    }
+
+    @Override
+    public int icon(ByteBuffer... icons) {
+        return icons.length;
+    }
+
+    @Override
+    public int x() {
+        return x;
+    }
+
+    @Override
+    public int y() {
+        return y;
+    }
+
+    @Override
+    public void position(int x, int y) {
+        this.x = x;
+        this.y = y;
+    }
+
+    @Override
+    public void size(int width, int height) {
+        this.width = width;
+        this.height = height;
+    }
+
+    @Override
+    public List<VideoMode> videoModes() {
+        return videoModes;
+    }
+
+    @Override
+    public void fullscreen(VideoMode mode) {
+        this.fullscreenMode = mode;
+        this.fullscreen = true;
     }
 
     @Override

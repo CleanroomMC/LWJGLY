@@ -115,6 +115,19 @@ class InputShimTest {
     }
 
     @Test
+    void clippingKeepsCoordinatesInsideTheWindow() {
+        bridge.pushMouse(new WindowBridge.MouseEvent(SDLMouse.SDL_BUTTON_LEFT, true, -5, 900, 0, 0, 0, 1L));
+        Mouse.setClipMouseCoordinatesToWindow(true);
+        try {
+            assertTrue(Mouse.next());
+            assertEquals(0, Mouse.getEventX());
+            assertEquals(0, Mouse.getEventY());
+        } finally {
+            Mouse.setClipMouseCoordinatesToWindow(false);
+        }
+    }
+
+    @Test
     void mouseEventsReportNoButton() {
         bridge.pushMouse(new WindowBridge.MouseEvent(0, false, 1, 2, 3, 4, 0, 9L));
         assertTrue(Mouse.next());

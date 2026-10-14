@@ -9,6 +9,7 @@ import org.lwjgl.sdl.SDL_DisplayMode;
 
 import java.awt.*;
 import java.nio.ByteBuffer;
+import java.util.List;
 
 /** LWJGL 2 display API over the window and GL context owned by Cleanroom. */
 public class Display {
@@ -304,11 +305,11 @@ public class Display {
     }
 
     public static int getX() {
-        return 0;
+        return LWJGLY.windowBridge().x();
     }
 
     public static int getY() {
-        return 0;
+        return LWJGLY.windowBridge().y();
     }
 
     public static boolean isCloseRequested() {
@@ -339,14 +340,13 @@ public class Display {
         LWJGLY.windowBridge().vsync(interval > 0);
     }
 
-    /** Returns true until the bridge tracks minimize and expose events. */
     public static boolean isVisible() {
-        return true;
+        return LWJGLY.windowBridge().visible();
     }
 
-    /** Always false: SDL has no equivalent of LWJGL 2's damage flag. */
+    /** Clears on read, as LWJGL 2's did. */
     public static boolean isDirty() {
-        return false;
+        return LWJGLY.windowBridge().consumeExposed();
     }
 
     public static DisplayMode getDisplayMode() {
@@ -360,26 +360,46 @@ public class Display {
     public static DisplayMode getDesktopDisplayMode() {
         SDL_DisplayMode mode = SDLVideo.SDL_GetDesktopDisplayMode(SDLVideo.SDL_GetPrimaryDisplay());
         if (mode != null) {
-            return new DisplayMode(mode.w(), mode.h());
+            return new DisplayMode(Math.round(mode.w() * mode.pixel_density()), Math.round(mode.h() * mode.pixel_density()));
         }
         WindowBridge bridge = LWJGLY.windowBridge();
         return new DisplayMode(bridge.width(), bridge.height());
     }
 
     public static DisplayMode[] getAvailableDisplayModes() throws LWJGLException {
-        return new DisplayMode[] { getDisplayMode() };
+        List<WindowBridge.VideoMode> modes = LWJGLY.windowBridge().videoModes();
+        if (modes.isEmpty()) {
+            return new DisplayMode[] { getDisplayMode() };
+        }
+        DisplayMode[] available = new DisplayMode[modes.size()];
+        for (int i = 0; i < available.length; i++) {
+            WindowBridge.VideoMode mode = modes.get(i);
+            available[i] = new DisplayMode(mode.width(), mode.height(), mode.bitsPerPixel(), mode.refreshRate());
+        }
+        return available;
     }
 
+    /** Switches the display while fullscreen with a fullscreen capable mode, and resizes the window otherwise. */
     public static void setDisplayMode(DisplayMode mode) throws LWJGLException {
         if (mode != null) {
-            LWJGLY.windowBridge().fullscreen(mode.isFullscreenCapable() && Display.isFullscreen());
+            applyDisplayMode(mode, mode.isFullscreenCapable() && Display.isFullscreen());
         }
     }
 
     public static void setDisplayModeAndFullscreen(DisplayMode mode) throws LWJGLException {
         if (mode != null) {
-            LWJGLY.windowBridge().fullscreen(mode.isFullscreenCapable());
+            applyDisplayMode(mode, mode.isFullscreenCapable());
         }
+    }
+
+    private static void applyDisplayMode(DisplayMode mode, boolean fullscreen) {
+        WindowBridge bridge = LWJGLY.windowBridge();
+        if (fullscreen) {
+            bridge.fullscreen(new WindowBridge.VideoMode(mode.getWidth(), mode.getHeight(), mode.getBitsPerPixel(), mode.getFrequency()));
+            return;
+        }
+        bridge.fullscreen(false);
+        bridge.size(mode.getWidth(), mode.getHeight());
     }
 
     // Accepted and ignored settings
@@ -390,19 +410,25 @@ public class Display {
     /** The clear colour before the first frame. Nothing observes it for the one frame it would last. */
     public static void setInitialBackground(float red, float green, float blue) { }
 
-    /** Returns zero until the bridge supports SDL window icons. */
     public static int setIcon(ByteBuffer[] icons) {
-        return 0;
+        return LWJGLY.windowBridge().icon(icons);
     }
 
-    /** Stores no resizable state until the bridge exposes it. */
-    public static void setResizable(boolean resizable) { }
+    public static void setResizable(boolean resizable) {
+        LWJGLY.windowBridge().resizable(resizable);
+    }
 
     public static boolean isResizable() {
-        return false;
+        return LWJGLY.windowBridge().resizable();
     }
 
-    public static void setLocation(int x, int y) { }
+    /** {@code (-1, -1)} centres the window, as in LWJGL 2. */
+    public static void setLocation(int x, int y) {
+        if (x == -1 && y == -1) {
+            x = y = SDLVideo.SDL_WINDOWPOS_CENTERED;
+        }
+        LWJGLY.windowBridge().position(x, y);
+    }
 
     public static String getAdapter() {
         return null;
@@ -412,7 +438,7 @@ public class Display {
         return null;
     }
 
-    /** Returns 1 until the bridge exposes a shared HiDPI scale. */
+    /** Sizes and mouse coordinates are already in pixels, as LWJGL 2 reported them without HiDPI, where this was 1 too. */
     public static float getPixelScaleFactor() {
         return 1.0F;
     }

@@ -97,11 +97,11 @@ public class Mouse {
     }
 
     public static int getEventX() {
-        return current == null ? 0 : (int) current.x();
+        return current == null ? 0 : clipX((int) current.x());
     }
 
     public static int getEventY() {
-        return current == null ? 0 : flipY(current.y());
+        return current == null ? 0 : clipY(flipY(current.y()));
     }
 
     public static int getEventDWheel() {
@@ -119,11 +119,11 @@ public class Mouse {
     }
 
     public static int getX() {
-        return (int) LWJGLY.windowBridge().mouseX();
+        return clipX((int) LWJGLY.windowBridge().mouseX());
     }
 
     public static int getY() {
-        return flipY(LWJGLY.windowBridge().mouseY());
+        return clipY(flipY(LWJGLY.windowBridge().mouseY()));
     }
 
     public static int getDX() {
@@ -171,7 +171,6 @@ public class Mouse {
         return clipToWindow;
     }
 
-    /** Stores the clipping request. SDL already confines a grabbed pointer. */
     public static void setClipMouseCoordinatesToWindow(boolean clip) {
         clipToWindow = clip;
     }
@@ -186,9 +185,8 @@ public class Mouse {
         }
     }
 
-    /** Returns true until the window bridge tracks pointer enter and leave events. */
     public static boolean isInsideWindow() {
-        return true;
+        return LWJGLY.windowBridge().mouseInside();
     }
 
     public static Cursor getNativeCursor() {
@@ -214,6 +212,14 @@ public class Mouse {
             }
         }
         return previous;
+    }
+
+    private static int clipX(int x) {
+        return clipToWindow ? Math.min(LWJGLY.windowBridge().width() - 1, Math.max(0, x)) : x;
+    }
+
+    private static int clipY(int y) {
+        return clipToWindow ? Math.min(LWJGLY.windowBridge().height() - 1, Math.max(0, y)) : y;
     }
 
     private static int flipY(float sdlY) {
