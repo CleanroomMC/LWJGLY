@@ -2,10 +2,8 @@ package org.lwjgl.opengl;
 
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
@@ -14,8 +12,6 @@ import java.io.InputStream;
 import java.util.Set;
 import java.util.TreeSet;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -41,8 +37,8 @@ class ContextCapabilitiesFlagSourceTest {
             "GL_AMD_multi_draw_indirect"
     );
 
-    // Unsupported entry points must keep their flags false
-    private static final Set<String> EXPECTED_FALSE = Set.of(
+    // These extensions are rebound from LWJGL 2's bytecode, so their methods work
+    private static final Set<String> EXPECTED_REBOUND = Set.of(
             "GL_ATI_vertex_streams",
             "GL_EXT_vertex_shader",
             "GL_NV_register_combiners",
@@ -89,31 +85,10 @@ class ContextCapabilitiesFlagSourceTest {
     }
 
     @Test
-    void extensionsWithUnservableMethodsAreNeverReadFromTheDriver() throws IOException {
+    void readReboundExtensionsFromTheDriver() throws IOException {
         Set<String> fromDriver = lookedUpInDriver(constructor());
-        for (String flag : EXPECTED_FALSE) {
-            assertFalse(fromDriver.contains(flag), flag + " has methods LWJGL 3 never bounded, reporting it as present would promise calls that throw");
+        for (String flag : EXPECTED_REBOUND) {
+            assertTrue(fromDriver.contains(flag), flag + " is rebound from LWJGL 2's bytecode, so the driver's answer is one the shim can keep");
         }
-    }
-
-    @Test
-    void unansweredFlagsAreConsideredFalse() throws IOException {
-        MethodNode constructor = constructor();
-        int checked = 0;
-        for (AbstractInsnNode insn : constructor.instructions) {
-            if (!(insn instanceof FieldInsnNode put) || put.getOpcode() != Opcodes.PUTFIELD || !EXPECTED_FALSE.contains(put.name)) {
-                continue;
-            }
-            AbstractInsnNode source = put.getPrevious();
-            while (source != null && source.getOpcode() == -1) {
-                source = source.getPrevious();
-            }
-            assertNotNull(source, "Nothing feeds the assignment of " + put.name);
-            assertEquals(Opcodes.ICONST_0, source.getOpcode(),
-                    put.name + " should be assigned a constant false");
-            checked++;
-        }
-
-        assertEquals(EXPECTED_FALSE.size(), checked, "Not every flag expected to stay false was found in the constructor");
     }
 }

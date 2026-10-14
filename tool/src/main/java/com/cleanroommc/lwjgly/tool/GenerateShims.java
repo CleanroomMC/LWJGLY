@@ -78,6 +78,12 @@ public final class GenerateShims {
             }
         }
 
+        List<String> rebindCandidates = placeheld.stream()
+                .filter(name -> name.startsWith("org/lwjgl/opengl/") && !name.equals(CONTEXT_CAPABILITIES))
+                .toList();
+        Rebind.Result rebind = Rebind.of(rebindCandidates, lwjgl2, lwjgl3, deltas, handWrittenNames);
+        placeheld.removeAll(rebind.classes().keySet());
+
         Set<String> nestedPlaceholders = publicNestedTypes(lwjgl2, placeheld);
         shipped.addAll(nestedPlaceholders);
 
@@ -91,7 +97,9 @@ public final class GenerateShims {
         }
         for (String name : placeheld) {
             if (CONTEXT_CAPABILITIES.equals(name)) {
-                writeContextCapabilities(srcDir, lwjgl2.get(name), lwjgl2, lwjgl3, handWrittenNames);
+                writeContextCapabilities(srcDir, lwjgl2.get(name), lwjgl2, lwjgl3,
+                        serviced -> handWrittenNames.contains(serviced) || rebind.classes().containsKey(serviced),
+                        rebind.functions());
             } else {
                 writePlaceholder(srcDir, lwjgl2, lwjgl3, lwjgl2.get(name), shipped, skippedMembers,
                         generatedConstructors, nestedPlaceholders);
@@ -99,12 +107,18 @@ public final class GenerateShims {
         }
 
         copyVerbatim(args[0], vendored, classDir);
+        for (Map.Entry<String, byte[]> entry : rebind.classes().entrySet()) {
+            Path target = classDir.resolve(entry.getKey() + ".class");
+            Files.createDirectories(target.getParent());
+            Files.write(target, entry.getValue());
+        }
         writeNativeCalls(nativeCalls, lwjgl2);
 
-        System.out.println("Shims: " + vendored.size() + " vendored verbatim, "
+        System.out.println("Shims: " + vendored.size() + " vendored verbatim, " + rebind.classes().size() + " rebound, "
                 + placeheld.size() + " placeholders, " + handWrittenNames.size() + " handwritten ("
                 + constantInterfaces + " with generated constants), "
                 + skippedInternal.size() + " unnameable classes skipped");
+        rebind.rejected().forEach((name, reason) -> System.out.println("  not rebound: " + name + ", " + reason));
         if (!skippedMembers.isEmpty()) {
             System.out.println("Members omitted, their types were never on the 1.12.2 classpath ("
                     + skippedMembers.size() + "):");
@@ -309,7 +323,7 @@ public final class GenerateShims {
     }
 
     private static void writeContextCapabilities(Path srcDir, ClassNode node, ApiIndex lwjgl2, ApiIndex lwjgl3,
-                                                 Set<String> handWrittenNames) throws IOException {
+                                                 CapabilityFlags.Serviced serviced, Set<String> functions) throws IOException {
         ClassNode glCapabilities = lwjgl3.get(GL_CAPABILITIES);
         if (glCapabilities == null) {
             throw new IllegalStateException("LWJGL 3 has no " + GL_CAPABILITIES + " to copy capabilities from");
@@ -332,7 +346,7 @@ public final class GenerateShims {
             }
         }
 
-        CapabilityFlags.Split split = CapabilityFlags.of(lwjgl2, lwjgl3, handWrittenNames::contains);
+        CapabilityFlags.Split split = CapabilityFlags.of(lwjgl2, lwjgl3, serviced);
         Set<String> fromDriver = new TreeSet<>(split.fromDriver());
 
         Path file = srcDir.resolve(node.name + ".java");
@@ -343,9 +357,18 @@ public final class GenerateShims {
             for (String field : fields) {
                 out.write("\n    public final boolean " + field + ";\n");
             }
+            for (String function : functions) {
+                out.write("\n    final long " + function + ";\n");
+            }
             out.write("\n    ContextCapabilities(GLCapabilities capabilities) {\n");
             if (!fromDriver.isEmpty()) {
                 out.write("        java.util.Set<String> driver = DriverExtensions.of(capabilities);\n");
+            }
+            if (!functions.isEmpty()) {
+                out.write("        org.lwjgl.system.FunctionProvider functions = GL.getFunctionProvider();\n");
+            }
+            for (String function : functions) {
+                out.write("        this." + function + " = functions.getFunctionAddress(\"" + function + "\");\n");
             }
             for (String field : fields) {
                 String source;
