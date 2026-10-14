@@ -1,5 +1,7 @@
 package org.lwjgl.opengl;
 
+import org.lwjgl.LWJGLException;
+
 import java.util.Collections;
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -26,13 +28,20 @@ public class GLContext {
         return built;
     }
 
-    /** Does nothing because Cleanroom owns context binding and capability setup. */
-    public static void useContext(Object context) {
-        throw new UnsupportedOperationException("org.lwjgl.opengl.GLContext.useContext: the window owns the GL context under Cleanroom. See build/lwjgly/PROBLEMS.md");
+    public static synchronized void useContext(Object context) throws LWJGLException {
+        useContext(context, false);
     }
 
-    public static void useContext(Object context, boolean forwardCompatible) {
-        useContext(context);
+    /**
+     * Loads capabilities for the context current on this thread, or clears them for {@code null}.
+     * A context made current through LWJGLY already has its own, so this only acts on one made current natively.
+     */
+    public static synchronized void useContext(Object context, boolean forwardCompatible) throws LWJGLException {
+        if (context == null) {
+            GL.setCapabilities(null);
+        } else if (!Display.isCurrent()) {
+            GL.createCapabilities(forwardCompatible);
+        }
     }
 
     /** GL is loaded in demand in LWJGL 3, thus this is no-op. */

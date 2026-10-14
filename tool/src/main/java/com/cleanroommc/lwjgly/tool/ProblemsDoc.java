@@ -185,8 +185,8 @@ public final class ProblemsDoc {
                     | `Display.create(PixelFormat, ContextAttribs)` | Validates the request against the adopted host context rather than creating one | Delay the host's SDL window/context creation until this call to honor creation-time attributes exactly |
                     | `Pbuffer` | Renders into a framebuffer object, single-sampled, without render to texture | Multisampled renderbuffers resolved on read, and render to texture over the colour attachment |
                     
-                    These do throw, because there is no sensible answer and nothing on 1.12.2 calls them:
-                    `Display.setParent`, `GLContext.useContext`.
+                    `Display.setParent` does throw, because an SDL window cannot be embedded in an AWT canvas
+                    and nothing on 1.12.2 calls it.
                     
                     `Mouse.setNativeCursor` used to be on that list and is now implemented, over SDL's own
                     cursors. One thing it does not do is animate on its own: `Cursor.getCapabilities()`
