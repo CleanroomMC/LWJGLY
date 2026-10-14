@@ -8,8 +8,10 @@ import org.lwjgl.PointerBuffer;
 import org.lwjgl.opengl.ContextAttribs;
 import org.lwjgl.opengl.Display;
 import org.lwjgl.opengl.Drawable;
+import org.lwjgl.opengl.Pbuffer;
 import org.lwjgl.opengl.PixelFormat;
 import org.lwjgl.opengl.PixelFormatLWJGL;
+import org.lwjgl.opengl.RenderTexture;
 import org.lwjgl.opengl.SharedDrawable;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -184,6 +186,21 @@ class DisplayCreateTest {
 
         drawable.destroy();
         assertTrue(bridge.sharedContext.closed);
+    }
+
+    @Test
+    void pbufferOwnsASharedContextAndRefusesRenderToTexture() throws Exception {
+        RenderTexture texture = new RenderTexture(false, true, false, false, RenderTexture.RENDER_TEXTURE_2D, 0);
+        assertThrows(LWJGLException.class, () -> new Pbuffer(4, 4, new PixelFormat(), texture, null));
+
+        Pbuffer pbuffer = new Pbuffer(16, 8, new PixelFormat(), null);
+        assertEquals(16, pbuffer.getWidth());
+        assertEquals(8, pbuffer.getHeight());
+        assertFalse(pbuffer.isBufferLost());
+
+        pbuffer.destroy();
+        assertTrue(bridge.sharedContext.closed);
+        assertThrows(IllegalStateException.class, pbuffer::makeCurrent);
     }
 
     @Test

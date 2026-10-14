@@ -10,6 +10,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.function.Predicate;
 
 public final class ProblemsDoc {
 
@@ -303,7 +304,9 @@ public final class ProblemsDoc {
         List<MethodNode> callable = node.methods.stream()
                 .filter(m -> ApiIndex.isCallable(m.access) && m.name.charAt(0) != '<')
                 .toList();
-        return callable.isEmpty() || callable.stream().anyMatch(m -> built.classifyMethod(internalName, m.name, m.desc, lwjgl3).works());
+        Predicate<MethodNode> works = m -> built.classifyMethod(internalName, m.name, m.desc, lwjgl3).works();
+        // A body that throws in LWJGL 2 as well is faithful, so a class of only those and working ones is done
+        return callable.stream().anyMatch(works) || callable.stream().allMatch(works.or(Built::throwsOnly));
     }
 
     private ProblemsDoc() { }

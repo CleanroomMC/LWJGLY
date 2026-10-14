@@ -65,7 +65,7 @@ public record Built(Map<String, ClassNode> shims, Map<String, List<ClassNode>> a
         return null;
     }
 
-    private static boolean throwsOnly(MethodNode method) {
+    static boolean throwsOnly(MethodNode method) {
         boolean throwsSomething = false;
         for (AbstractInsnNode insn : method.instructions) {
             int opcode = insn.getOpcode();
