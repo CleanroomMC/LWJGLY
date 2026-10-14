@@ -10,6 +10,7 @@ import org.lwjgl.opengl.Display;
 import org.lwjgl.opengl.Drawable;
 import org.lwjgl.opengl.PixelFormat;
 import org.lwjgl.opengl.PixelFormatLWJGL;
+import org.lwjgl.opengl.SharedDrawable;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -167,6 +168,22 @@ class DisplayCreateTest {
 
         Display.getDrawable().releaseContext();
         assertFalse(bridge.current);
+    }
+
+    @Test
+    void sharedDrawableDrivesBridgeSharedContext() throws Exception {
+        SharedDrawable drawable = new SharedDrawable(Display.getDrawable());
+        Display.makeCurrent();
+
+        drawable.makeCurrent();
+        assertTrue(drawable.isCurrent());
+        assertFalse(bridge.current);
+
+        drawable.releaseContext();
+        assertFalse(drawable.isCurrent());
+
+        drawable.destroy();
+        assertTrue(bridge.sharedContext.closed);
     }
 
     @Test

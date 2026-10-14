@@ -260,6 +260,31 @@ public interface WindowBridge {
     boolean mouseGrabbed();
 
     /**
+     * Creates a GL context that shares objects with the host's, backing LWJGL 2's {@code SharedDrawable}.
+     *
+     * <p>The calling thread keeps whichever context was current on it.
+     */
+    SharedContext createSharedContext();
+
+    /**
+     * A GL context sharing objects with the host's.
+     *
+     * <p>{@code makeCurrent} must bind LWJGL 3's capabilities as {@link #makeCurrent()} does.
+     */
+    interface SharedContext extends AutoCloseable {
+
+        boolean isCurrent();
+
+        void makeCurrent();
+
+        void release();
+
+        @Override
+        void close();
+
+    }
+
+    /**
      * A keyboard transition and any text character associated with it by the host.
      *
      * <p>The physical {@code scancode} drives LWJGL 2 key mapping.

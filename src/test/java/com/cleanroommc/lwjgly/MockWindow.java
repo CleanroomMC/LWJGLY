@@ -25,6 +25,34 @@ final class MockWindow implements WindowBridge {
     long windowHandle = 0xBEEFL;
     long contextHandle = 0xCAFEL;
     long currentWindowHandle = windowHandle;
+    MockSharedContext sharedContext;
+
+    final class MockSharedContext implements SharedContext {
+
+        boolean current, closed;
+
+        @Override
+        public boolean isCurrent() {
+            return current;
+        }
+
+        @Override
+        public void makeCurrent() {
+            current = true;
+            MockWindow.this.current = false;
+        }
+
+        @Override
+        public void release() {
+            current = false;
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
+
+    }
 
     void pushKey(KeyEvent event) {
         keyEvents.add(event);
@@ -109,6 +137,11 @@ final class MockWindow implements WindowBridge {
     @Override
     public void releaseContext() {
         current = false;
+    }
+
+    @Override
+    public SharedContext createSharedContext() {
+        return sharedContext = new MockSharedContext();
     }
 
     @Override
