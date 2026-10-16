@@ -274,8 +274,13 @@ public class Display {
         LWJGLY.windowBridge().releaseContext();
     }
 
-    /** Returns whether this thread has LWJGL 3 GL capabilities. */
+    /** Returns whether the display's own context is current on this thread, not just any context. */
     public static boolean isCurrent() throws LWJGLException {
+        return LWJGLY.hasWindowBridge() && SDLVideo.SDL_GL_GetCurrentWindow() == LWJGLY.windowBridge().handle();
+    }
+
+    /** Returns whether this thread has LWJGL 3 GL capabilities, for whichever context is current. */
+    static boolean hasCapabilities() {
         try {
             return GL.getCapabilities() != null;
         } catch (IllegalStateException noCapabilities) {

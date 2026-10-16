@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.Display;
-import org.lwjgl.opengl.GL;
 import org.lwjgl.sdl.SDLMouse;
 import org.lwjgl.sdl.SDLScancode;
 
@@ -200,12 +199,6 @@ class InputShimTest {
         Display.destroy();
         assertFalse(bridge.current, "destroy() should release the context");
         assertTrue(Display.isCreated(), "destroy() must not close the host's window");
-    }
-
-    @Test
-    void displayIsNotCurrentWhenLwjglCapabilitiesAreCleared() throws Exception {
-        GL.setCapabilities(null);
-        assertFalse(Display.isCurrent());
     }
 
     @Test

@@ -39,7 +39,7 @@ public class GLContext {
     public static synchronized void useContext(Object context, boolean forwardCompatible) throws LWJGLException {
         if (context == null) {
             GL.setCapabilities(null);
-        } else if (!Display.isCurrent()) {
+        } else if (!Display.hasCapabilities()) {
             GL.createCapabilities(forwardCompatible);
         }
     }

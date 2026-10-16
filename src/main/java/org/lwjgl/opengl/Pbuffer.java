@@ -84,7 +84,7 @@ public final class Pbuffer extends DrawableGL implements PbufferConstants {
         if (context != null && colorBuffer != 0) {
             // Renderbuffers are shared, so any current context in the group can delete them; the FBO dies with ours
             try {
-                if (!Display.isCurrent()) {
+                if (!Display.hasCapabilities()) {
                     context.makeCurrent();
                 }
                 GL30.glDeleteRenderbuffers(colorBuffer);
