@@ -119,14 +119,17 @@ public class Mouse {
     }
 
     public static int getX() {
-        return clipX((int) LWJGLY.windowBridge().mouseX());
+        return LWJGLY.hasWindowBridge() ? clipX((int) LWJGLY.windowBridge().mouseX()) : 0;
     }
 
     public static int getY() {
-        return clipY(flipY(LWJGLY.windowBridge().mouseY()));
+        return LWJGLY.hasWindowBridge() ? clipY(flipY(LWJGLY.windowBridge().mouseY())) : 0;
     }
 
     public static int getDX() {
+        if (!LWJGLY.hasWindowBridge()) {
+            return 0;
+        }
         float delta = LWJGLY.windowBridge().takeMouseDeltaX() + deltaXCarry;
         int whole = (int) delta;
         deltaXCarry = delta - whole;
@@ -134,6 +137,9 @@ public class Mouse {
     }
 
     public static int getDY() {
+        if (!LWJGLY.hasWindowBridge()) {
+            return 0;
+        }
         float delta = -LWJGLY.windowBridge().takeMouseDeltaY() + deltaYCarry;
         int whole = (int) delta;
         deltaYCarry = delta - whole;
@@ -141,6 +147,9 @@ public class Mouse {
     }
 
     public static int getDWheel() {
+        if (!LWJGLY.hasWindowBridge()) {
+            return 0;
+        }
         float delta = LWJGLY.windowBridge().takeMouseWheel() * WHEEL_DELTA + wheelCarry;
         int whole = (int) delta;
         wheelCarry = delta - whole;
@@ -156,7 +165,7 @@ public class Mouse {
     }
 
     public static boolean isGrabbed() {
-        return LWJGLY.windowBridge().mouseGrabbed();
+        return LWJGLY.hasWindowBridge() && LWJGLY.windowBridge().mouseGrabbed();
     }
 
     public static void setGrabbed(boolean grabbed) {

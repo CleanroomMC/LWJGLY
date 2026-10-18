@@ -3,7 +3,10 @@ package org.lwjgl.opengl;
 import com.cleanroommc.lwjgly.LWJGLY;
 import com.cleanroommc.lwjgly.spi.WindowBridge;
 import org.lwjgl.LWJGLException;
+import org.lwjgl.PointerBuffer;
 import org.lwjgl.input.Mouse;
+import org.lwjgl.sdl.SDLPixels;
+import org.lwjgl.sdl.SDLStdinc;
 import org.lwjgl.sdl.SDLVideo;
 import org.lwjgl.sdl.SDL_DisplayMode;
 
@@ -84,6 +87,247 @@ public class Display {
         }
         throw new LWJGLException("Unsupported PixelFormatLWJGL implementation: " + pixelFormat.getClass().getName() +
                 " - OpenGL ES display creation is not bridged");
+    }
+
+    public static boolean isCreated() {
+        return LWJGLY.hasWindowBridge();
+    }
+
+    public static void destroy() {
+        if (LWJGLY.hasWindowBridge()) {
+            LWJGLY.windowBridge().releaseContext();
+        }
+    }
+
+    public static void update() {
+        update(true);
+    }
+
+    public static void update(boolean processMessages) {
+        WindowBridge bridge = LWJGLY.windowBridge();
+        bridge.swapBuffers();
+        if (processMessages) {
+            bridge.pump();
+        }
+        Mouse.updateCursor();
+    }
+
+    public static void swapBuffers() throws LWJGLException {
+        LWJGLY.windowBridge().swapBuffers();
+    }
+
+    public static void processMessages() {
+        LWJGLY.windowBridge().pump();
+    }
+
+    public static void sync(int fps) {
+        if (fps <= 0) {
+            return;
+        }
+        long frame = 1_000_000_000L / fps;
+        long now = System.nanoTime();
+        if (nextFrameNanos == 0L || now - nextFrameNanos > frame * 4) {
+            nextFrameNanos = now;
+        }
+        nextFrameNanos += frame;
+        long remaining = nextFrameNanos - System.nanoTime();
+        while (remaining > 0) {
+            if (remaining > 1_500_000L) {
+                try {
+                    Thread.sleep(1);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            } else {
+                Thread.yield();
+            }
+            remaining = nextFrameNanos - System.nanoTime();
+        }
+    }
+
+    public static void makeCurrent() throws LWJGLException {
+        LWJGLY.windowBridge().makeCurrent();
+    }
+
+    public static void releaseContext() throws LWJGLException {
+        LWJGLY.windowBridge().releaseContext();
+    }
+
+    /** Returns whether the display's own context is current on this thread, not just any context. */
+    public static boolean isCurrent() throws LWJGLException {
+        return LWJGLY.hasWindowBridge() && SDLVideo.SDL_GL_GetCurrentWindow() == LWJGLY.windowBridge().handle();
+    }
+
+    public static Drawable getDrawable() {
+        return DRAWABLE;
+    }
+
+    public static String getTitle() {
+        return LWJGLY.hasWindowBridge() ? LWJGLY.windowBridge().title() : "Cleanroom";
+    }
+
+    public static void setTitle(String title) {
+        LWJGLY.windowBridge().title(title);
+    }
+
+    public static int getWidth() {
+        return LWJGLY.hasWindowBridge() ? LWJGLY.windowBridge().width() : 0;
+    }
+
+    public static int getHeight() {
+        return LWJGLY.hasWindowBridge() ? LWJGLY.windowBridge().height() : 0;
+    }
+
+    public static int getX() {
+        return LWJGLY.windowBridge().x();
+    }
+
+    public static int getY() {
+        return LWJGLY.windowBridge().y();
+    }
+
+    public static boolean isCloseRequested() {
+        return LWJGLY.windowBridge().closeRequested();
+    }
+
+    public static boolean isActive() {
+        return LWJGLY.windowBridge().focused();
+    }
+
+    public static boolean wasResized() {
+        return LWJGLY.hasWindowBridge() && LWJGLY.windowBridge().consumeResized();
+    }
+
+    public static boolean isFullscreen() {
+        return LWJGLY.hasWindowBridge() && LWJGLY.windowBridge().fullscreen();
+    }
+
+    public static void setFullscreen(boolean fullscreen) throws LWJGLException {
+        LWJGLY.windowBridge().fullscreen(fullscreen);
+    }
+
+    public static void setVSyncEnabled(boolean enabled) {
+        LWJGLY.windowBridge().vsync(enabled);
+    }
+
+    public static void setSwapInterval(int interval) {
+        LWJGLY.windowBridge().vsync(interval > 0);
+    }
+
+    public static boolean isVisible() {
+        return LWJGLY.windowBridge().visible();
+    }
+
+    /** Clears on read, as LWJGL 2's did. */
+    public static boolean isDirty() {
+        return LWJGLY.windowBridge().consumeExposed();
+    }
+
+    public static DisplayMode getDisplayMode() {
+        if (!LWJGLY.hasWindowBridge()) {
+            return getDesktopDisplayMode();
+        }
+        WindowBridge bridge = LWJGLY.windowBridge();
+        return new DisplayMode(bridge.width(), bridge.height());
+    }
+
+    public static DisplayMode getDesktopDisplayMode() {
+        SDL_DisplayMode mode = SDLVideo.SDL_GetDesktopDisplayMode(SDLVideo.SDL_GetPrimaryDisplay());
+        if (mode != null) {
+            return new DisplayMode(Math.round(mode.w() * mode.pixel_density()), Math.round(mode.h() * mode.pixel_density()));
+        }
+        WindowBridge bridge = LWJGLY.windowBridge();
+        return new DisplayMode(bridge.width(), bridge.height());
+    }
+
+    public static DisplayMode[] getAvailableDisplayModes() throws LWJGLException {
+        if (!LWJGLY.hasWindowBridge()) {
+            return primaryDisplayModes();
+        }
+        List<WindowBridge.VideoMode> modes = LWJGLY.windowBridge().videoModes();
+        if (modes.isEmpty()) {
+            return new DisplayMode[] { getDisplayMode() };
+        }
+        DisplayMode[] available = new DisplayMode[modes.size()];
+        for (int i = 0; i < available.length; i++) {
+            WindowBridge.VideoMode mode = modes.get(i);
+            available[i] = new DisplayMode(mode.width(), mode.height(), mode.bitsPerPixel(), mode.refreshRate());
+        }
+        return available;
+    }
+
+    /** Switches the display while fullscreen with a fullscreen capable mode, and resizes the window otherwise. */
+    public static void setDisplayMode(DisplayMode mode) throws LWJGLException {
+        if (mode != null) {
+            applyDisplayMode(mode, mode.isFullscreenCapable() && Display.isFullscreen());
+        }
+    }
+
+    public static void setDisplayModeAndFullscreen(DisplayMode mode) throws LWJGLException {
+        if (mode != null) {
+            applyDisplayMode(mode, mode.isFullscreenCapable());
+        }
+    }
+
+    // Accepted and ignored settings
+
+    /** Gamma, brightness and contrast. SDL 3 dropped the gamma ramp API. See build/lwjgly/PROBLEMS.md. */
+    public static void setDisplayConfiguration(float gamma, float brightness, float contrast) throws LWJGLException { }
+
+    /** The clear colour before the first frame. Nothing observes it for the one frame it would last. */
+    public static void setInitialBackground(float red, float green, float blue) { }
+
+    public static int setIcon(ByteBuffer[] icons) {
+        return LWJGLY.windowBridge().icon(icons);
+    }
+
+    public static void setResizable(boolean resizable) {
+        LWJGLY.windowBridge().resizable(resizable);
+    }
+
+    public static boolean isResizable() {
+        return LWJGLY.hasWindowBridge() && LWJGLY.windowBridge().resizable();
+    }
+
+    /** {@code (-1, -1)} centres the window, as in LWJGL 2. */
+    public static void setLocation(int x, int y) {
+        if (x == -1 && y == -1) {
+            x = y = SDLVideo.SDL_WINDOWPOS_CENTERED;
+        }
+        LWJGLY.windowBridge().position(x, y);
+    }
+
+    public static String getAdapter() {
+        return null;
+    }
+
+    public static String getVersion() {
+        return null;
+    }
+
+    /** Sizes and mouse coordinates are already in pixels, as LWJGL 2 reported them without HiDPI, where this was 1 too. */
+    public static float getPixelScaleFactor() {
+        return 1.0F;
+    }
+
+    public static Canvas getParent() {
+        return null;
+    }
+
+    /** Embedding GL in an AWT canvas does not apply to an SDL-windowed game. */
+    public static void setParent(Canvas parent) throws LWJGLException {
+        throw new UnsupportedOperationException("org.lwjgl.opengl.Display.setParent: the game is not AWT-hosted, see build/lwjgly/PROBLEMS.md");
+    }
+
+    /** Returns whether this thread has LWJGL 3 GL capabilities, for whichever context is current. */
+    static boolean hasCapabilities() {
+        try {
+            return GL.getCapabilities() != null;
+        } catch (IllegalStateException noCapabilities) {
+            // getCapabilities() may throw after the threadlocal binding is cleared
+            return false;
+        }
     }
 
     private static WindowBridge.PixelFormatRequest pixelFormatRequest(PixelFormat pixelFormat) {
@@ -196,8 +440,7 @@ public class Display {
         }
     }
 
-    private static void failContextAdoption(WindowBridge bridge, String message, Throwable cause,
-                                            boolean releaseContext) throws LWJGLException {
+    private static void failContextAdoption(WindowBridge bridge, String message, Throwable cause, boolean releaseContext) throws LWJGLException {
         LWJGLException failure = cause == null ? new LWJGLException(message) : new LWJGLException(message, cause);
         if (releaseContext) {
             try {
@@ -209,191 +452,24 @@ public class Display {
         throw failure;
     }
 
-    public static boolean isCreated() {
-        return LWJGLY.hasWindowBridge();
-    }
-
-    public static void destroy() {
-        if (LWJGLY.hasWindowBridge()) {
-            LWJGLY.windowBridge().releaseContext();
+    private static DisplayMode[] primaryDisplayModes() {
+        PointerBuffer modes = SDLVideo.SDL_GetFullscreenDisplayModes(SDLVideo.SDL_GetPrimaryDisplay());
+        if (modes == null) {
+            return new DisplayMode[] { getDesktopDisplayMode() };
         }
-    }
-
-    public static void update() {
-        update(true);
-    }
-
-    public static void update(boolean processMessages) {
-        WindowBridge bridge = LWJGLY.windowBridge();
-        bridge.swapBuffers();
-        if (processMessages) {
-            bridge.pump();
-        }
-        Mouse.updateCursor();
-    }
-
-    public static void swapBuffers() throws LWJGLException {
-        LWJGLY.windowBridge().swapBuffers();
-    }
-
-    public static void processMessages() {
-        LWJGLY.windowBridge().pump();
-    }
-
-    public static void sync(int fps) {
-        if (fps <= 0) {
-            return;
-        }
-        long frame = 1_000_000_000L / fps;
-        long now = System.nanoTime();
-        if (nextFrameNanos == 0L || now - nextFrameNanos > frame * 4) {
-            nextFrameNanos = now;
-        }
-        nextFrameNanos += frame;
-        long remaining = nextFrameNanos - System.nanoTime();
-        while (remaining > 0) {
-            if (remaining > 1_500_000L) {
-                try {
-                    Thread.sleep(1);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return;
-                }
-            } else {
-                Thread.yield();
-            }
-            remaining = nextFrameNanos - System.nanoTime();
-        }
-    }
-
-    public static void makeCurrent() throws LWJGLException {
-        LWJGLY.windowBridge().makeCurrent();
-    }
-
-    public static void releaseContext() throws LWJGLException {
-        LWJGLY.windowBridge().releaseContext();
-    }
-
-    /** Returns whether the display's own context is current on this thread, not just any context. */
-    public static boolean isCurrent() throws LWJGLException {
-        return LWJGLY.hasWindowBridge() && SDLVideo.SDL_GL_GetCurrentWindow() == LWJGLY.windowBridge().handle();
-    }
-
-    /** Returns whether this thread has LWJGL 3 GL capabilities, for whichever context is current. */
-    static boolean hasCapabilities() {
         try {
-            return GL.getCapabilities() != null;
-        } catch (IllegalStateException noCapabilities) {
-            // getCapabilities() may throw after the threadlocal binding is cleared
-            return false;
-        }
-    }
-
-    public static Drawable getDrawable() {
-        return DRAWABLE;
-    }
-
-    public static String getTitle() {
-        return LWJGLY.windowBridge().title();
-    }
-
-    public static void setTitle(String title) {
-        LWJGLY.windowBridge().title(title);
-    }
-
-    public static int getWidth() {
-        return LWJGLY.windowBridge().width();
-    }
-
-    public static int getHeight() {
-        return LWJGLY.windowBridge().height();
-    }
-
-    public static int getX() {
-        return LWJGLY.windowBridge().x();
-    }
-
-    public static int getY() {
-        return LWJGLY.windowBridge().y();
-    }
-
-    public static boolean isCloseRequested() {
-        return LWJGLY.windowBridge().closeRequested();
-    }
-
-    public static boolean isActive() {
-        return LWJGLY.windowBridge().focused();
-    }
-
-    public static boolean wasResized() {
-        return LWJGLY.windowBridge().consumeResized();
-    }
-
-    public static boolean isFullscreen() {
-        return LWJGLY.windowBridge().fullscreen();
-    }
-
-    public static void setFullscreen(boolean fullscreen) throws LWJGLException {
-        LWJGLY.windowBridge().fullscreen(fullscreen);
-    }
-
-    public static void setVSyncEnabled(boolean enabled) {
-        LWJGLY.windowBridge().vsync(enabled);
-    }
-
-    public static void setSwapInterval(int interval) {
-        LWJGLY.windowBridge().vsync(interval > 0);
-    }
-
-    public static boolean isVisible() {
-        return LWJGLY.windowBridge().visible();
-    }
-
-    /** Clears on read, as LWJGL 2's did. */
-    public static boolean isDirty() {
-        return LWJGLY.windowBridge().consumeExposed();
-    }
-
-    public static DisplayMode getDisplayMode() {
-        if (!LWJGLY.hasWindowBridge()) {
-            return getDesktopDisplayMode();
-        }
-        WindowBridge bridge = LWJGLY.windowBridge();
-        return new DisplayMode(bridge.width(), bridge.height());
-    }
-
-    public static DisplayMode getDesktopDisplayMode() {
-        SDL_DisplayMode mode = SDLVideo.SDL_GetDesktopDisplayMode(SDLVideo.SDL_GetPrimaryDisplay());
-        if (mode != null) {
-            return new DisplayMode(Math.round(mode.w() * mode.pixel_density()), Math.round(mode.h() * mode.pixel_density()));
-        }
-        WindowBridge bridge = LWJGLY.windowBridge();
-        return new DisplayMode(bridge.width(), bridge.height());
-    }
-
-    public static DisplayMode[] getAvailableDisplayModes() throws LWJGLException {
-        List<WindowBridge.VideoMode> modes = LWJGLY.windowBridge().videoModes();
-        if (modes.isEmpty()) {
-            return new DisplayMode[] { getDisplayMode() };
-        }
-        DisplayMode[] available = new DisplayMode[modes.size()];
-        for (int i = 0; i < available.length; i++) {
-            WindowBridge.VideoMode mode = modes.get(i);
-            available[i] = new DisplayMode(mode.width(), mode.height(), mode.bitsPerPixel(), mode.refreshRate());
-        }
-        return available;
-    }
-
-    /** Switches the display while fullscreen with a fullscreen capable mode, and resizes the window otherwise. */
-    public static void setDisplayMode(DisplayMode mode) throws LWJGLException {
-        if (mode != null) {
-            applyDisplayMode(mode, mode.isFullscreenCapable() && Display.isFullscreen());
-        }
-    }
-
-    public static void setDisplayModeAndFullscreen(DisplayMode mode) throws LWJGLException {
-        if (mode != null) {
-            applyDisplayMode(mode, mode.isFullscreenCapable());
+            if (!modes.hasRemaining()) {
+                return new DisplayMode[] { getDesktopDisplayMode() };
+            }
+            DisplayMode[] available = new DisplayMode[modes.remaining()];
+            for (int i = 0; i < available.length; i++) {
+                SDL_DisplayMode mode = SDL_DisplayMode.create(modes.get(i));
+                available[i] = new DisplayMode(Math.round(mode.w() * mode.pixel_density()), Math.round(mode.h() * mode.pixel_density()),
+                        SDLPixels.SDL_BITSPERPIXEL(mode.format()), Math.round(mode.refresh_rate()));
+            }
+            return available;
+        } finally {
+            SDLStdinc.SDL_free(modes);
         }
     }
 
@@ -405,56 +481,6 @@ public class Display {
         }
         bridge.fullscreen(false);
         bridge.size(mode.getWidth(), mode.getHeight());
-    }
-
-    // Accepted and ignored settings
-
-    /** Gamma, brightness and contrast. SDL 3 dropped the gamma ramp API. See build/lwjgly/PROBLEMS.md. */
-    public static void setDisplayConfiguration(float gamma, float brightness, float contrast) throws LWJGLException { }
-
-    /** The clear colour before the first frame. Nothing observes it for the one frame it would last. */
-    public static void setInitialBackground(float red, float green, float blue) { }
-
-    public static int setIcon(ByteBuffer[] icons) {
-        return LWJGLY.windowBridge().icon(icons);
-    }
-
-    public static void setResizable(boolean resizable) {
-        LWJGLY.windowBridge().resizable(resizable);
-    }
-
-    public static boolean isResizable() {
-        return LWJGLY.windowBridge().resizable();
-    }
-
-    /** {@code (-1, -1)} centres the window, as in LWJGL 2. */
-    public static void setLocation(int x, int y) {
-        if (x == -1 && y == -1) {
-            x = y = SDLVideo.SDL_WINDOWPOS_CENTERED;
-        }
-        LWJGLY.windowBridge().position(x, y);
-    }
-
-    public static String getAdapter() {
-        return null;
-    }
-
-    public static String getVersion() {
-        return null;
-    }
-
-    /** Sizes and mouse coordinates are already in pixels, as LWJGL 2 reported them without HiDPI, where this was 1 too. */
-    public static float getPixelScaleFactor() {
-        return 1.0F;
-    }
-
-    public static Canvas getParent() {
-        return null;
-    }
-
-    /** Embedding GL in an AWT canvas does not apply to an SDL-windowed game. */
-    public static void setParent(Canvas parent) throws LWJGLException {
-        throw new UnsupportedOperationException("org.lwjgl.opengl.Display.setParent: the game is not AWT-hosted, see build/lwjgly/PROBLEMS.md");
     }
 
     protected Display() { }
