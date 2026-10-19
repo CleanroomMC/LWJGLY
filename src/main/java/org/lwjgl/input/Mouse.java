@@ -63,8 +63,12 @@ public class Mouse {
     }
 
     public static boolean next() {
-        current = LWJGLY.windowBridge().nextMouseEvent();
-        return current != null;
+        WindowBridge.MouseEvent event = LWJGLY.windowBridge().nextMouseEvent();
+        if (event == null) {
+            return false;
+        }
+        current = event;
+        return true;
     }
 
     /** Returns the event button, or -1 for motion and wheel events. */

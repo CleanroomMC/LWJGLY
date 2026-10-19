@@ -77,7 +77,6 @@ public class Keyboard implements KeyboardConstants {
         while (true) {
             WindowBridge.KeyEvent event = bridge.nextKeyEvent();
             if (event == null) {
-                current = null;
                 return false;
             }
             if (event.repeat() && !repeatEvents) {
