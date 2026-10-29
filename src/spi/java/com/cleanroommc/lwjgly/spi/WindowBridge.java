@@ -398,7 +398,7 @@ public interface WindowBridge {
      * @param timestampNs SDL's timestamp, which LWJGL 2 exposes as {@code Keyboard.getEventNanoseconds()}
      * @param mods SDL modifiers at the moment event occurred
      */
-    record KeyEvent(int scancode, int key, boolean pressed, boolean repeat, char character, long timestampNs, short mods) { }
+    record KeyEvent(int scancode, int key, boolean pressed, boolean repeat, char character, long timestampNs, int mods) { }
 
     /**
      * A mouse event expressed in SDL's coordinate and button conventions.

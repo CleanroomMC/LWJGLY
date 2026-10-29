@@ -107,6 +107,10 @@ public class Keyboard implements KeyboardConstants {
         return current == null ? KEY_NONE : Scancodes.toLwjgl(current.scancode());
     }
 
+    public static int getModifiers() {
+        return current == null ? 0 : current.mods();
+    }
+
     public static boolean getEventKeyState() {
         return current != null && current.pressed();
     }

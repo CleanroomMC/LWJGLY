@@ -38,7 +38,7 @@ class InputShimTest {
     @Test
     void keyEvent() {
         Keyboard.enableRepeatEvents(true);
-        bridge.pushKey(new WindowBridge.KeyEvent(SDLScancode.SDL_SCANCODE_W, 0, true, false, 'w', 1234L));
+        bridge.pushKey(new WindowBridge.KeyEvent(SDLScancode.SDL_SCANCODE_W, 0, true, false, 'w', 1234L, 0));
 
         assertTrue(Keyboard.next());
         assertEquals(Keyboard.KEY_W, Keyboard.getEventKey());
@@ -52,8 +52,8 @@ class InputShimTest {
 
     @Test
     void repeatEventsAreFilteredWhenDisabled() {
-        bridge.pushKey(new WindowBridge.KeyEvent(SDLScancode.SDL_SCANCODE_A, 0, true, true, 'a', 1L));
-        bridge.pushKey(new WindowBridge.KeyEvent(SDLScancode.SDL_SCANCODE_B, 0, true, false, 'b', 2L));
+        bridge.pushKey(new WindowBridge.KeyEvent(SDLScancode.SDL_SCANCODE_A, 0, true, true, 'a', 1L, 0));
+        bridge.pushKey(new WindowBridge.KeyEvent(SDLScancode.SDL_SCANCODE_B, 0, true, false, 'b', 2L, 0));
 
         Keyboard.enableRepeatEvents(false);
         assertFalse(Keyboard.areRepeatEventsEnabled());
