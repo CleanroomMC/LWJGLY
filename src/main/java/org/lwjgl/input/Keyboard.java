@@ -102,6 +102,10 @@ public class Keyboard implements KeyboardConstants {
         layoutAwareness = enable;
     }
 
+    public static boolean isLayoutAwarenessEnabled() {
+        return layoutAwareness;
+    }
+
     public static int getKeyCount() {
         return KEYBOARD_SIZE;
     }
