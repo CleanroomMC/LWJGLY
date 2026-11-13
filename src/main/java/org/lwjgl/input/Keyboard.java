@@ -4,6 +4,7 @@ import com.cleanroommc.lwjgly.LWJGLY;
 import com.cleanroommc.lwjgly.rt.Scancodes;
 import com.cleanroommc.lwjgly.spi.WindowBridge;
 import org.lwjgl.LWJGLException;
+import org.lwjgl.sdl.SDLKeyboard;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -22,6 +23,7 @@ public class Keyboard implements KeyboardConstants {
 
     private static WindowBridge.KeyEvent current;
     private static boolean repeatEvents;
+    private static boolean layoutAwareness;
 
     static {
         for (Field field : Keyboard.class.getFields()) {
@@ -60,7 +62,8 @@ public class Keyboard implements KeyboardConstants {
         if (key < 0 || key >= KEYBOARD_SIZE) {
             return "NONE";
         }
-        String name = KEY_NAMES[key];
+        String name = !layoutAwareness ? KEY_NAMES[key] : SDLKeyboard.SDL_GetKeyName(
+                SDLKeyboard.SDL_GetKeyFromScancode(Scancodes.toSdl(key), (short) 0, false));
         return name == null ? "NONE" : name;
     }
 
@@ -93,6 +96,10 @@ public class Keyboard implements KeyboardConstants {
 
     public static boolean areRepeatEventsEnabled() {
         return repeatEvents;
+    }
+
+    public static void enableLayoutAwareness(boolean enable) {
+        layoutAwareness = enable;
     }
 
     public static int getKeyCount() {
