@@ -1,9 +1,12 @@
 package com.cleanroommc.lwjgly.rt;
 
+import org.lwjgl.BufferUtils;
 import org.lwjgl.openal.AL;
 import org.lwjgl.openal.ALC;
 import org.lwjgl.openal.ALC10;
 import org.lwjgl.openal.ALCCapabilities;
+import org.lwjgl.openal.EXTEfx;
+import org.lwjgl.openal.SOFTHRTF;
 
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
@@ -86,16 +89,23 @@ public final class AlState {
     }
 
     private static IntBuffer attributes(int frequency, int refresh, boolean synchronized_) {
-        if (frequency == 0 && refresh == 0 && !synchronized_) {
-            return null;
+        boolean driverDefaults = frequency == 0 && refresh == 0 && !synchronized_;
+        IntBuffer attributes = BufferUtils.createIntBuffer(driverDefaults ? 5 : 11);
+        if (!driverDefaults) {
+            attributes.put(ALC10.ALC_FREQUENCY)
+                    .put(frequency)
+                    .put(ALC10.ALC_REFRESH)
+                    .put(refresh)
+                    .put(ALC10.ALC_SYNC)
+                    .put(synchronized_ ? ALC10.ALC_TRUE : ALC10.ALC_FALSE);
         }
-        IntBuffer attributes = org.lwjgl.BufferUtils.createIntBuffer(7);
-        return attributes.put(ALC10.ALC_FREQUENCY)
-                .put(frequency)
-                .put(ALC10.ALC_REFRESH)
-                .put(refresh)
-                .put(ALC10.ALC_SYNC)
-                .put(synchronized_ ? ALC10.ALC_TRUE : ALC10.ALC_FALSE)
+        // OpenAL Soft defaults HRTF to auto, which turns it on for headphones and can muddy up the stereo mix
+        // Also there is a default for only 2 auxiliary sends
+        // But some mods route every source into 4 reverb slots.
+        return attributes.put(SOFTHRTF.ALC_HRTF_SOFT)
+                .put(ALC10.ALC_FALSE)
+                .put(EXTEfx.ALC_MAX_AUXILIARY_SENDS)
+                .put(4)
                 .put(0)
                 .flip();
     }
