@@ -101,7 +101,7 @@ public final class AlState {
         }
         // OpenAL Soft defaults HRTF to auto, which turns it on for headphones and can muddy up the stereo mix
         // Also there is a default for only 2 auxiliary sends
-        // But some mods route every source into 4 reverb slots.
+        // But some mods route every source into 4 reverb slots
         return attributes.put(SOFTHRTF.ALC_HRTF_SOFT)
                 .put(ALC10.ALC_FALSE)
                 .put(EXTEfx.ALC_MAX_AUXILIARY_SENDS)
